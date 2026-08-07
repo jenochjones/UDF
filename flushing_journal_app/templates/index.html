@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flushing Journal</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+
+<body>
+    <div class="app-shell">
+        <aside class="left-toolbar">
+            <div class="toolbar-title">Inputs</div>
+
+            <div class="toolbar-upload-block">
+                <button id="loadModelBtn" class="tool-button" type="button">
+                    <span class="tool-button-icon">📄</span>
+                    <span class="tool-button-text">Load Model</span>
+                    <span class="tool-button-subtext">.inp</span>
+                </button>
+
+                <div id="modelLoadStatus" class="toolbar-status"></div>
+            </div>
+
+            <div class="toolbar-upload-block toolbar-layer-block">
+                <button class="tool-button" type="button" data-upload-layer="valves">
+                    <span class="tool-button-icon">◇</span>
+                    <span class="tool-button-text">Valves</span>
+                    <span class="tool-button-subtext">Point shapefile</span>
+                </button>
+                <div id="valvesUploadStatus" class="toolbar-upload-status"></div>
+                <div class="toolbar-field-block" style="display:none;" id="valvesFieldSelector">
+                    <label class="toolbar-label" for="valvesIdFieldSelect">ID field</label>
+                    <select id="valvesIdFieldSelect" class="toolbar-input"></select>
+                </div>
+            </div>
+
+            <div class="toolbar-upload-block toolbar-layer-block">
+                <button class="tool-button" type="button" data-upload-layer="hydrants">
+                    <span class="tool-button-icon">●</span>
+                    <span class="tool-button-text">Hydrants</span>
+                    <span class="tool-button-subtext">Point shapefile</span>
+                </button>
+                <div id="hydrantsUploadStatus" class="toolbar-upload-status"></div>
+                <div class="toolbar-field-block" style="display:none;" id="hydrantsFieldSelector">
+                    <label class="toolbar-label" for="hydrantsIdFieldSelect">ID field</label>
+                    <select id="hydrantsIdFieldSelect" class="toolbar-input"></select>
+                </div>
+            </div>
+
+            <div class="toolbar-upload-block toolbar-layer-block">
+                <button id="connectHydrantsBtn" class="tool-button" type="button" disabled>
+                    <span class="tool-button-icon">●</span>
+                    <span class="tool-button-text">Connect Hydrants</span>
+                    <span class="tool-button-subtext">Text</span>
+                </button>
+                <div id="hydrantsConnectStatus" class="toolbar-upload-status"></div>
+            </div>
+
+            <div class="toolbar-spacer"></div>
+        </aside>
+
+        <main class="main-area">
+            <div id="map"></div>
+            <div id="footer"></div>
+        </main>
+    </div>
+
+    <div id="epsgModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="epsgModalTitle">
+        <div class="modal-card">
+            <button id="closeEpsgModal" class="modal-close" type="button" aria-label="Close">×</button>
+            <h3 id="epsgModalTitle">Model Coordinate System</h3>
+            <p class="modal-copy">Choose the coordinate reference system for the uploaded EPANET model.</p>
+            <label class="modal-label" for="epsgInput">EPSG Code</label>
+            <input id="epsgInput" class="modal-input" type="text" value="26912" placeholder="26912 or EPSG:26912" />
+            <div id="epsgModalError" class="modal-error" aria-live="polite"></div>
+            <div class="modal-actions">
+                <button id="cancelEpsgModal" class="modal-button secondary" type="button">Cancel</button>
+                <button id="confirmEpsgModal" class="modal-button primary" type="button">Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+
+</html>
