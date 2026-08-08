@@ -7,6 +7,7 @@ let hydrantsLoaded = false;
 
 document.addEventListener("DOMContentLoaded", function () {
     initializeTabs();
+    initializeSidebarModeButtons();
     initializeMap();
     initializeToolbar();
     initializeModelUpload();
@@ -26,6 +27,146 @@ function initializeTabs() {
             button.classList.add("active");
         });
     });
+}
+
+async function persistMovedFeature(layerType, marker) {
+    if (!marker) return;
+
+    const feature = marker.feature || null;
+    if (!feature) {
+        // nothing to persist
+        return;
+    }
+
+    // try to determine id field and id value
+    const idSelect = document.getElementById(`${layerType}IdFieldSelect`);
+    const idField = idSelect && idSelect.value ? idSelect.value : null;
+    const props = feature.properties || {};
+    const idValue = idField ? props[idField] : (props.id || props.ID || props.name || null);
+
+    const payload = {
+        layer_type: layerType,
+        id_field: idField,
+        id_value: idValue,
+        feature: feature
+    };
+
+    const statusDiv = document.getElementById(layerType + 'UploadStatus');
+    if (statusDiv) {
+        statusDiv.textContent = 'Saving moved feature...';
+        statusDiv.classList.remove('error');
+    }
+
+    try {
+        const response = await fetch('/update_feature_geometry', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Failed to save moved feature.');
+        }
+
+        if (statusDiv) {
+            statusDiv.textContent = data.message || 'Moved feature saved.';
+        }
+    } catch (err) {
+        console.error(err);
+        if (statusDiv) {
+            statusDiv.textContent = err.message || 'Error saving moved feature.';
+            statusDiv.classList.add('error');
+        }
+    }
+}
+
+function initializeSidebarModeButtons() {
+    const modeButtons = document.querySelectorAll(".sidebar-mode-button");
+
+    modeButtons.forEach(function (button) {
+        button.addEventListener("click", function () {
+            modeButtons.forEach(function (btn) {
+                btn.classList.remove("active");
+            });
+
+            button.classList.add("active");
+            setActiveSidebarToolbar(button.getAttribute("data-toolbar-target"));
+            updateAllLayersDraggability();
+        });
+    });
+
+    // Initialize to the existing active button or default to project
+    const initial = document.querySelector('.sidebar-mode-button.active') || document.querySelector('.sidebar-mode-button[data-toolbar-target="project"]');
+    if (initial) {
+        setActiveSidebarToolbar(initial.getAttribute('data-toolbar-target'));
+    } else {
+        setActiveSidebarToolbar('project');
+    }
+    updateAllLayersDraggability();
+}
+
+function updateAllLayersDraggability() {
+    const active = document.querySelector('.sidebar-mode-button.active')?.getAttribute('data-toolbar-target') || 'project';
+
+    // Hydrants should be draggable only when hydrants toolbar is active
+    enableLayerDraggability('hydrants', active === 'hydrants');
+
+    // Valves should be draggable only when valves toolbar is active
+    enableLayerDraggability('valves', active === 'valves');
+}
+
+function enableLayerDraggability(layerType, enabled) {
+    const group = uploadedLayerGroups[layerType];
+
+    if (!group) return;
+
+    group.eachLayer(function (layer) {
+        if (layer instanceof L.Marker) {
+            if (enabled) {
+                if (layer.dragging) {
+                    layer.dragging.enable();
+                } else {
+                    layer.options.draggable = true;
+                }
+                // attach dragend handler
+                layer.off('dragend');
+                layer.on('dragend', function (e) {
+                    const p = e.target.getLatLng();
+                    const statusDiv = document.getElementById(layerType + 'UploadStatus');
+                    if (statusDiv) statusDiv.textContent = `Moved ${layerType.slice(0, -1)} to ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
+                    if (layer.feature && layer.feature.geometry) {
+                        layer.feature.geometry.coordinates = [p.lng, p.lat];
+                    }
+                    persistMovedFeature(layerType, layer);
+                });
+            } else {
+                if (layer.dragging) {
+                    layer.dragging.disable();
+                } else {
+                    layer.options.draggable = false;
+                }
+                layer.off('dragend');
+            }
+        }
+    });
+}
+
+function setActiveSidebarToolbar(toolbarName) {
+    const toolbarSections = document.querySelectorAll(".toolbar-section");
+    const title = document.querySelector(".toolbar-title");
+
+    toolbarSections.forEach(function (section) {
+        const isActive = section.getAttribute("data-toolbar") === toolbarName;
+        section.classList.toggle("hidden", !isActive);
+    });
+
+    if (title) {
+        title.textContent = toolbarName.charAt(0).toUpperCase() + toolbarName.slice(1);
+    }
 }
 
 function initializeToolbar() {
@@ -86,7 +227,8 @@ function initializeMap() {
     L.tileLayer(
         "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         {
-            maxZoom: 23,
+            maxZoom: 26,
+            maxNativeZoom: 19,
             crossOrigin: true
         }
     ).addTo(map);
@@ -104,6 +246,9 @@ function initializeMap() {
     setTimeout(function () {
         map.invalidateSize();
     }, 250);
+
+    // Ensure marker draggability is in sync after layers are created
+    updateAllLayersDraggability();
 }
 
 function initializeModelUpload() {
@@ -639,10 +784,10 @@ function displayPointLayer(layerType, geojson) {
             const label = props.name || props.id || layerType;
 
             if (layerType === "valves") {
-                return addValveMarker(latlng, label, props.status || "untouched", layerGroup);
+                return addValveMarker(latlng, label, props.status || "untouched", layerGroup, 'valves', feature);
             }
 
-            return addHydrantMarker(latlng, label, props.status || "untouched", layerGroup);
+            return addHydrantMarker(latlng, label, props.status || "untouched", layerGroup, 'hydrants', feature);
         }
     });
 
@@ -653,7 +798,7 @@ function displayPointLayer(layerType, geojson) {
     }, 100);
 }
 
-function addValveMarker(latlng, label, status, targetLayer) {
+function addValveMarker(latlng, label, status, targetLayer, layerType, feature) {
     let color = "#d4ff00";
 
     if (status === "reopen") {
@@ -669,12 +814,39 @@ function addValveMarker(latlng, label, status, targetLayer) {
         iconAnchor: [9, 9]
     });
 
-    return L.marker(latlng, {
-        icon: icon
+    const active = document.querySelector('.sidebar-mode-button.active')?.getAttribute('data-toolbar-target') || 'project';
+    const draggable = active === (layerType || 'valves');
+
+    const marker = L.marker(latlng, {
+        icon: icon,
+        draggable: !!draggable
     }).addTo(targetLayer || map);
+
+    // attach the original feature so we can persist updates
+    if (feature) {
+        marker.feature = feature;
+    }
+
+    if (draggable) {
+        marker.on('dragend', function (e) {
+            const p = e.target.getLatLng();
+            const statusDiv = document.getElementById('valvesUploadStatus');
+            if (statusDiv) statusDiv.textContent = `Moved valve to ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
+            // update in-memory feature geometry and persist
+            if (marker.feature && marker.feature.geometry) {
+                marker.feature.geometry.coordinates = [p.lng, p.lat];
+            }
+            persistMovedFeature('valves', marker);
+        });
+    } else {
+        // ensure no dragging handlers are active
+        marker.off('dragend');
+    }
+
+    return marker;
 }
 
-function addHydrantMarker(latlng, label, status, targetLayer) {
+function addHydrantMarker(latlng, label, status, targetLayer, layerType, feature) {
     let color = "#ff0000";
 
     if (status === "flushed") {
@@ -690,9 +862,33 @@ function addHydrantMarker(latlng, label, status, targetLayer) {
         iconAnchor: [8, 8]
     });
 
-    return L.marker(latlng, {
-        icon: icon
+    const active = document.querySelector('.sidebar-mode-button.active')?.getAttribute('data-toolbar-target') || 'project';
+    const draggable = active === (layerType || 'hydrants');
+
+    const marker = L.marker(latlng, {
+        icon: icon,
+        draggable: !!draggable
     }).addTo(targetLayer || map).bindPopup(label);
+
+    if (feature) {
+        marker.feature = feature;
+    }
+
+    if (draggable) {
+        marker.on('dragend', function (e) {
+            const p = e.target.getLatLng();
+            const statusDiv = document.getElementById('hydrantsUploadStatus');
+            if (statusDiv) statusDiv.textContent = `Moved hydrant to ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
+            if (marker.feature && marker.feature.geometry) {
+                marker.feature.geometry.coordinates = [p.lng, p.lat];
+            }
+            persistMovedFeature('hydrants', marker);
+        });
+    } else {
+        marker.off('dragend');
+    }
+
+    return marker;
 }
 
 async function connectHydrantsToModel() {

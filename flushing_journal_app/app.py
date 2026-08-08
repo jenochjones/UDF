@@ -526,6 +526,108 @@ def set_layer_id_field():
         }), 500
 
 
+@app.route("/update_feature_geometry", methods=["POST"])
+def update_feature_geometry():
+    """
+    Receive an updated feature GeoJSON for a given uploaded layer (hydrants or valves)
+    and update the stored in-memory GeoJSON. If the original shapefile exists on
+    disk, attempt to overwrite it with the updated GeoJSON so exported ZIPs include
+    the new coordinates.
+    """
+
+    try:
+        data = request.get_json(silent=True) or {}
+        layer_type = (data.get("layer_type") or "").strip().lower()
+        id_field = data.get("id_field") or None
+        id_value = data.get("id_value") or None
+        feature = data.get("feature")
+
+        if layer_type not in {"hydrants", "valves"}:
+            return jsonify({"success": False, "message": "Layer type must be hydrants or valves."}), 400
+
+        if not feature or not isinstance(feature, dict) or not feature.get("geometry"):
+            return jsonify({"success": False, "message": "A feature with geometry must be provided."}), 400
+
+        layer = MODEL_STORE["uploaded_layers"].get(layer_type)
+        if not layer or not layer.get("geojson"):
+            return jsonify({"success": False, "message": "No uploaded layer found for that type."}), 400
+
+        features = layer["geojson"].get("features", [])
+
+        # Try to find by id_field if provided
+        matched_index = None
+        if id_field and id_value is not None:
+            for idx, f in enumerate(features):
+                props = f.get("properties") or {}
+                if str(props.get(id_field)) == str(id_value):
+                    matched_index = idx
+                    break
+
+        # Fallback: try matching 'id' or 'ID' or 'name' property
+        if matched_index is None:
+            for key in ("id", "ID", "name", "Name"):
+                for idx, f in enumerate(features):
+                    props = f.get("properties") or {}
+                    if key in props and feature.get("properties") and props.get(key) == feature.get("properties").get(key):
+                        matched_index = idx
+                        break
+                if matched_index is not None:
+                    break
+
+        # Final fallback: match by nearest coordinate if geometry present
+        if matched_index is None:
+            try:
+                incoming_geom = shape(feature.get("geometry"))
+                best_idx = None
+                best_dist = None
+                for idx, f in enumerate(features):
+                    g = f.get("geometry")
+                    if not g:
+                        continue
+                    try:
+                        existing_geom = shape(g)
+                    except Exception:
+                        continue
+                    # use simple distance on lon/lat geometry
+                    dist = incoming_geom.distance(existing_geom)
+                    if best_dist is None or dist < best_dist:
+                        best_idx = idx
+                        best_dist = dist
+                matched_index = best_idx
+            except Exception:
+                matched_index = None
+
+        if matched_index is None:
+            return jsonify({"success": False, "message": "Could not locate matching feature to update."}), 404
+
+        # Replace geometry (and optionally properties) for the matched feature
+        features[matched_index]["geometry"] = feature.get("geometry")
+        # Optionally update properties if provided
+        if feature.get("properties"):
+            features[matched_index]["properties"] = feature.get("properties")
+
+        # Write back into model store
+        MODEL_STORE["uploaded_layers"][layer_type]["geojson"]["features"] = features
+
+        # If shapefile exists on disk, attempt to overwrite it with updated geojson
+        save_dir = MODEL_STORE["uploaded_layers"][layer_type].get("path")
+        shape_name = MODEL_STORE["uploaded_layers"][layer_type].get("shape_name")
+        if save_dir and shape_name:
+            try:
+                gdf = gpd.GeoDataFrame.from_features({"type": "FeatureCollection", "features": features}, crs="EPSG:4326")
+                shp_out = os.path.join(save_dir, shape_name)
+                # Overwrite shapefile
+                gdf.to_file(shp_out)
+            except Exception as e:
+                print("Warning: failed to write shapefile back to disk:", e)
+
+        return jsonify({"success": True, "message": "Feature geometry updated."})
+
+    except Exception as exc:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
 @app.route("/upload_shapefile", methods=["POST"])
 def upload_shapefile():
     """
