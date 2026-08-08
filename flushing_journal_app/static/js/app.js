@@ -43,6 +43,8 @@ function initializeToolbar() {
 
     const zoomToProjectBtn = document.getElementById("zoomToProjectBtn");
     const connectHydrantsBtn = document.getElementById("connectHydrantsBtn");
+    const downloadProjectBtn = document.getElementById("downloadProjectBtn");
+    const uploadProjectBtn = document.getElementById("uploadProjectBtn");
 
     if (zoomToProjectBtn) {
         zoomToProjectBtn.addEventListener("click", zoomToProject);
@@ -51,6 +53,14 @@ function initializeToolbar() {
     if (connectHydrantsBtn) {
         connectHydrantsBtn.disabled = true;
         connectHydrantsBtn.addEventListener("click", connectHydrantsToModel);
+    }
+
+    if (downloadProjectBtn) {
+        downloadProjectBtn.addEventListener("click", downloadProjectZip);
+    }
+
+    if (uploadProjectBtn) {
+        uploadProjectBtn.addEventListener("click", uploadProjectZip);
     }
 }
 
@@ -76,7 +86,7 @@ function initializeMap() {
     L.tileLayer(
         "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         {
-            maxZoom: 20,
+            maxZoom: 23,
             crossOrigin: true
         }
     ).addTo(map);
@@ -166,6 +176,123 @@ function initializeLayerUpload() {
         hydrantsIdFieldSelect.addEventListener("change", function () {
             setLayerIdField("hydrants", hydrantsIdFieldSelect.value);
         });
+    }
+}
+
+async function downloadProjectZip() {
+    const projectStatus = document.getElementById("projectLoadStatus");
+    if (projectStatus) {
+        projectStatus.textContent = "Exporting project...";
+        projectStatus.classList.remove("error");
+    }
+
+    try {
+        const response = await fetch("/download_project", {
+            method: "GET"
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.message || "Failed to export project.");
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "flushing_journal_project.zip";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        if (projectStatus) {
+            projectStatus.textContent = "Project export ready.";
+        }
+    } catch (error) {
+        console.error(error);
+        if (projectStatus) {
+            projectStatus.textContent = error.message;
+            projectStatus.classList.add("error");
+        }
+    }
+}
+
+async function uploadProjectZip() {
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = ".zip";
+    fileInput.style.display = "none";
+
+    document.body.appendChild(fileInput);
+
+    const file = await new Promise((resolve) => {
+        fileInput.addEventListener("change", function () {
+            resolve(fileInput.files[0]);
+        }, { once: true });
+
+        fileInput.click();
+    });
+
+    document.body.removeChild(fileInput);
+
+    const projectStatus = document.getElementById("projectLoadStatus");
+    if (!file) {
+        if (projectStatus) {
+            projectStatus.textContent = "No project file selected.";
+            projectStatus.classList.add("error");
+        }
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("project_zip", file);
+
+    if (projectStatus) {
+        projectStatus.textContent = "Importing project...";
+        projectStatus.classList.remove("error");
+    }
+
+    try {
+        const response = await fetch("/upload_project", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || "Failed to import project.");
+        }
+
+        if (data.pipe_geojson) {
+            displayModelPipes(data.pipe_geojson);
+            modelLoaded = true;
+        }
+
+        if (data.hydrants) {
+            displayPointLayer("hydrants", data.hydrants.geojson);
+            populateLayerFieldSelect("hydrants", data.hydrants.fields || [], data.hydrants.selected_id_field || "");
+            hydrantsLoaded = true;
+        } else {
+            hydrantsLoaded = false;
+        }
+
+        if (data.valves) {
+            displayPointLayer("valves", data.valves.geojson);
+            populateLayerFieldSelect("valves", data.valves.fields || [], data.valves.selected_id_field || "");
+        }
+
+        updateConnectHydrantsButtonState();
+
+        if (projectStatus) {
+            projectStatus.textContent = data.message || "Project loaded successfully.";
+        }
+    } catch (error) {
+        console.error(error);
+        if (projectStatus) {
+            projectStatus.textContent = error.message;
+            projectStatus.classList.add("error");
+        }
     }
 }
 
