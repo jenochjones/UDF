@@ -190,8 +190,9 @@ body {
 }
 
 .left-toolbar {
-    flex: 0 0 260px;
-    width: 260px;
+    flex: 0 0 30%;
+    width: 30%;
+    min-width: 280px;
     height: 100vh;
     background: linear-gradient(180deg, #26303b 0%, #1f2731 100%);
     color: white;
@@ -332,6 +333,141 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.sequence-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.sequence-tab-button {
+    border: 1px solid #bcc5d0;
+    border-radius: 999px;
+    background: #e9edf4;
+    color: #26303b;
+    padding: 8px 12px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.sequence-tab-button.active {
+    background: #0b6fbd;
+    border-color: #0a5fad;
+    color: white;
+}
+
+.sequence-panels {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    max-height: calc(100vh - 260px);
+}
+
+.sequence-panel {
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sequence-panel.active {
+    display: flex;
+}
+
+.sequence-operation {
+    border: 1px solid #d1d7df;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #f7f8fa;
+}
+
+.sequence-operation-header {
+    width: 100%;
+    border: none;
+    background: #e8ebef;
+    color: #1f2a37;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.sequence-operation-content {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 14px 14px;
+}
+
+.sequence-operation.open .sequence-operation-content {
+    display: flex;
+}
+
+.control-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.control-row.toggle-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.control-row.float-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.control-row.float-row .mode-toggle {
+    min-width: 120px;
+}
+
+.control-row .control-toggle,
+.control-row .control-button {
+    white-space: nowrap;
+}
+
+.control-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #324250;
+}
+
+.control-input {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 12px;
+    border: 1px solid #bcc5d0;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.control-units {
+    font-size: 12px;
+    color: #556977;
+    padding: 0 5px;
+}
+
+.control-button {
+    padding: 8px 10px;
+    border: 1px solid #bcc5d0;
+    border-radius: 8px;
+    background: #e9edf4;
+    color: #1f2a37;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.control-toggle {
+    padding: 8px 10px;
+    border: 1px solid #bcc5d0;
+    border-radius: 8px;
+    background: #e9edf4;
+    color: #1f2a37;
+    cursor: pointer;
+    font-size: 12px;
 }
 
 /* -----------------------------

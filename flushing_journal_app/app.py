@@ -7,6 +7,7 @@ import geopandas as gpd
 import json
 import math
 import os
+import re
 import tempfile
 import traceback
 import uuid
@@ -36,7 +37,8 @@ MODEL_STORE = {
     "uploaded_layers": {
         "valves": None,
         "hydrants": None
-    }
+    },
+    "sequences": []
 }
 
 
@@ -94,6 +96,8 @@ def upload_model():
             wn=wn,
             model_crs=model_crs
         )
+
+        print(f"[DEBUG] Model CRS: {model_crs}")
 
         MODEL_STORE["wn"] = wn
         MODEL_STORE["inp_path"] = inp_path
@@ -157,7 +161,8 @@ def upload_project():
             "model_crs": result["model_crs"],
             "pipe_geojson": result["pipe_geojson"],
             "hydrants": result["hydrants"],
-            "valves": result["valves"]
+            "valves": result["valves"],
+            "sequences": result.get("sequences", [])
         })
     except Exception as exc:
         print(traceback.format_exc())
@@ -244,10 +249,8 @@ def connect_hydrants():
                 })
 
         return geometries
-    """
-    Connect each uploaded hydrant to the nearest pipe in the loaded WNTR model.
-    """
 
+    # Connect each uploaded hydrant to the nearest pipe in the loaded WNTR model.
     try:
         if MODEL_STORE["wn"] is None:
             return jsonify({
@@ -456,6 +459,7 @@ def connect_hydrants():
             wn=wn,
             model_crs=model_crs
         )
+        
         MODEL_STORE["wn"] = wn
 
         if MODEL_STORE["inp_path"]:
@@ -468,13 +472,69 @@ def connect_hydrants():
             "skipped_count": skipped_count,
             "pipe_geojson": MODEL_STORE["pipe_geojson"]
         })
-
     except Exception as exc:
         print(traceback.format_exc())
         return jsonify({
             "success": False,
             "message": str(exc)
         }), 500
+
+
+@app.route("/snap_valves", methods=["POST"])
+def snap_valves():
+    try:
+        if MODEL_STORE["pipe_geojson"] is None:
+            return jsonify({"success": False, "message": "No model has been loaded yet."}), 400
+
+        valves_layer = MODEL_STORE["uploaded_layers"].get("valves")
+        if not valves_layer or not valves_layer.get("geojson") or not valves_layer["geojson"].get("features"):
+            return jsonify({"success": False, "message": "No valves shapefile has been uploaded."}), 400
+
+        pipe_features = [feature for feature in MODEL_STORE["pipe_geojson"].get("features", []) if feature.get("geometry")]
+        if not pipe_features:
+            return jsonify({"success": False, "message": "The loaded model does not contain any pipe geometries."}), 400
+
+        features = valves_layer["geojson"].get("features", [])
+        for feature in features:
+            geometry = feature.get("geometry")
+            if not geometry:
+                continue
+
+            point = shape(geometry)
+            best_distance = None
+            best_location = None
+
+            for pipe_feature in pipe_features:
+                try:
+                    pipe_geometry = shape(pipe_feature.get("geometry"))
+                except Exception:
+                    continue
+
+                if not pipe_geometry.is_valid:
+                    continue
+
+                distance = point.distance(pipe_geometry)
+                if best_distance is None or distance < best_distance:
+                    best_distance = distance
+                    best_location = pipe_geometry.interpolate(pipe_geometry.project(point))
+
+            if best_location is not None:
+                feature["geometry"]["coordinates"] = [best_location.x, best_location.y]
+
+        MODEL_STORE["uploaded_layers"]["valves"]["geojson"]["features"] = features
+
+        save_dir = MODEL_STORE["uploaded_layers"]["valves"].get("path")
+        shape_name = MODEL_STORE["uploaded_layers"]["valves"].get("shape_name")
+        if save_dir and shape_name:
+            try:
+                write_point_geojson_to_shapefile(save_dir, shape_name, {"type": "FeatureCollection", "features": features}, crs="EPSG:4326")
+            except Exception as e:
+                print("Warning: failed to write snapped valves shapefile back to disk:", e)
+
+        return jsonify({"success": True, "message": "Valves snapped to the closest pipes.", "geojson": {"type": "FeatureCollection", "features": features}})
+    except Exception as exc:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 @app.route("/set_layer_id_field", methods=["POST"])
@@ -614,10 +674,7 @@ def update_feature_geometry():
         shape_name = MODEL_STORE["uploaded_layers"][layer_type].get("shape_name")
         if save_dir and shape_name:
             try:
-                gdf = gpd.GeoDataFrame.from_features({"type": "FeatureCollection", "features": features}, crs="EPSG:4326")
-                shp_out = os.path.join(save_dir, shape_name)
-                # Overwrite shapefile
-                gdf.to_file(shp_out)
+                write_point_geojson_to_shapefile(save_dir, shape_name, {"type": "FeatureCollection", "features": features}, crs="EPSG:4326")
             except Exception as e:
                 print("Warning: failed to write shapefile back to disk:", e)
 
@@ -677,7 +734,7 @@ def upload_shapefile():
         source_crs_value = request.form.get("source_crs", "").strip()
         selected_id_field = request.form.get("id_field", "").strip() or None
         shp_path = os.path.join(save_dir, shp_file)
-        print('converting to geojson')
+        
         geojson, field_names = point_shapefile_to_geojson(
             shp_path=shp_path,
             source_crs=source_crs_value or None
@@ -685,6 +742,14 @@ def upload_shapefile():
 
         if selected_id_field and selected_id_field not in field_names:
             selected_id_field = None
+
+        if layer_type == "valves":
+            for feature in geojson.get("features", []):
+                props = feature.setdefault("properties", {})
+                if "original_location" not in props and feature.get("geometry"):
+                    coords = feature["geometry"].get("coordinates")
+                    if isinstance(coords, list) and len(coords) >= 2:
+                        props["original_location"] = [coords[0], coords[1]]
 
         MODEL_STORE["uploaded_layers"][layer_type] = {
             "path": save_dir,
@@ -711,6 +776,153 @@ def upload_shapefile():
             "success": False,
             "message": str(exc)
         }), 500
+
+
+@app.route("/upload_sequences", methods=["POST"])
+def upload_sequences():
+    """
+    Upload one or more sequence text files, parse them on the backend,
+    store the sequence array, and return it to the frontend.
+    """
+    try:
+        uploaded_files = request.files.getlist("sequence_files")
+        if not uploaded_files or all(file.filename == "" for file in uploaded_files):
+            return jsonify({
+                "success": False,
+                "message": "No sequence files were provided."
+            }), 400
+
+        sequences = []
+        for uploaded_file in uploaded_files:
+            if uploaded_file.filename == "":
+                continue
+
+            filename = secure_filename(uploaded_file.filename)
+            if not filename.lower().endswith(".txt"):
+                return jsonify({
+                    "success": False,
+                    "message": "Only .txt sequence files are supported."
+                }), 400
+
+            text = uploaded_file.stream.read().decode("utf-8", errors="replace")
+            sequence = parse_sequence_text(text, filename)
+            sequences.append(sequence)
+
+        MODEL_STORE["sequences"] = sequences
+
+        return jsonify({
+            "success": True,
+            "message": f"Loaded {len(sequences)} sequence file(s).",
+            "sequences": sequences
+        })
+    except Exception as exc:
+        print(traceback.format_exc())
+        return jsonify({
+            "success": False,
+            "message": str(exc)
+        }), 500
+
+
+def parse_sequence_text(text, filename=None):
+    sequence = {
+        "name": filename[:-4] if filename and filename.lower().endswith(".txt") else (filename or "Sequence"),
+        "operations": []
+    }
+
+    if text is None:
+        return sequence
+
+    cleaned_text = text.strip()
+    name_match = re.search(r"\[([^\]]+)\]", cleaned_text)
+    if name_match:
+        sequence["name"] = name_match.group(1).strip()
+
+    operation_blocks = re.findall(r"\(\d+\)[\s\S]*?(?=(?:\(\d+\)|$))", cleaned_text)
+
+    for block in operation_blocks:
+        operation_match = re.match(r"^\((\d+)\)", block.strip())
+        if not operation_match:
+            continue
+
+        operation_name = operation_match.group(1)
+        open_valves = []
+        close_valves = []
+        open_hydrants = []
+        orifice_size = ""
+        target_velocity = ""
+        map_message = ""
+
+        open_valves_match = re.search(r">([^<]*)<", block)
+        if open_valves_match:
+            open_valves = [val.strip() for val in open_valves_match.group(1).split(",") if val.strip()]
+
+        close_valves_match = re.search(r"<([^>]*)>", block)
+        if close_valves_match:
+            close_valves = [val.strip() for val in close_valves_match.group(1).split(",") if val.strip()]
+
+        hydrants_match = re.search(r"\{([^}]*)\}", block)
+        if hydrants_match:
+            hydrants_value = hydrants_match.group(1).strip()
+            if hydrants_value:
+                parts = hydrants_value.split("*", 1)
+                hydrants_part = parts[0].strip()
+                if hydrants_part:
+                    open_hydrants = [val.strip() for val in hydrants_part.split(",") if val.strip()]
+                if len(parts) > 1:
+                    orifice_size = parts[1].strip()
+
+        map_message_match = re.search(r"\|([^|]*)\|", block)
+        if map_message_match:
+            map_message = map_message_match.group(1).strip()
+
+        sequence["operations"].append({
+            "name": operation_name,
+            "open_valves": open_valves,
+            "close_valves": close_valves,
+            "open_hydrants": open_hydrants,
+            "orifice_size": orifice_size,
+            "target_velocity": target_velocity,
+            "toggle_mode": "Orifice Size",
+            "map_message": map_message
+        })
+
+    return sequence
+
+
+def sequence_to_text(sequence):
+    lines = []
+    if sequence.get("name"):
+        lines.append(f"[{sequence['name']}]".strip())
+        lines.append("")
+
+    for operation in sequence.get("operations", []):
+        lines.append(f"({operation.get('name', '')})")
+
+        open_valves_text = ",".join(operation.get("open_valves", []))
+        lines.append(f">{open_valves_text}<")
+
+        close_valves_text = ",".join(operation.get("close_valves", []))
+        lines.append(f"<{close_valves_text}>")
+
+        hydrants = ",".join(operation.get("open_hydrants", []))
+        orifice_size = operation.get("orifice_size", "") or ""
+        if hydrants or orifice_size:
+            lines.append(f"{{{hydrants}{'*' + orifice_size if orifice_size else ''}}}")
+        else:
+            lines.append("{}")
+
+        map_message = operation.get("map_message", "") or ""
+        lines.append(f"|{map_message}|")
+        lines.append("")
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def sanitize_sequence_filename(name):
+    sanitized = re.sub(r"[^a-zA-Z0-9._-]+", "_", name or "sequence")
+    if not sanitized.lower().endswith(".txt"):
+        sanitized = f"{sanitized}.txt"
+    return sanitized
 
 
 def point_shapefile_to_geojson(shp_path, source_crs=None):
@@ -787,6 +999,36 @@ def point_shapefile_to_geojson(shp_path, source_crs=None):
     return geojson, field_names
 
 
+def write_point_geojson_to_shapefile(save_dir, shape_name, geojson, crs="EPSG:4326"):
+    """Write point GeoJSON to a shapefile while preserving supported scalar properties."""
+    features = geojson.get("features", []) if geojson else []
+    clean_features = []
+    for feature in features:
+        props = feature.get("properties") or {}
+        clean_props = {}
+        for key, value in props.items():
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                clean_props[key] = value
+            else:
+                try:
+                    clean_props[key] = json.dumps(value)
+                except Exception:
+                    clean_props[key] = str(value)
+        clean_feature = {
+            "type": "Feature",
+            "geometry": feature.get("geometry"),
+            "properties": clean_props
+        }
+        clean_features.append(clean_feature)
+
+    gdf = gpd.GeoDataFrame.from_features(
+        {"type": "FeatureCollection", "features": clean_features},
+        crs=crs
+    )
+    shp_out = os.path.join(save_dir, shape_name)
+    gdf.to_file(shp_out)
+
+
 def make_json_serializable(value):
     """
     Recursively convert values to strict JSON-safe Python values.
@@ -853,7 +1095,8 @@ def create_project_archive():
                 "id_field": MODEL_STORE["uploaded_layers"]["valves"].get("id_field")
                 if MODEL_STORE["uploaded_layers"]["valves"] else None
             }
-        }
+        },
+        "sequences": [sequence.get("name") for sequence in MODEL_STORE.get("sequences", [])]
     }
 
     buffer = io.BytesIO()
@@ -871,6 +1114,10 @@ def create_project_archive():
             layer = MODEL_STORE["uploaded_layers"].get(layer_name)
             if layer and layer.get("geojson"):
                 archive.writestr(f"{layer_name}.geojson", json.dumps(layer["geojson"]))
+
+        for sequence in MODEL_STORE.get("sequences", []):
+            sequence_filename = sanitize_sequence_filename(sequence.get("name", "sequence"))
+            archive.writestr(f"sequences/{sequence_filename}", sequence_to_text(sequence))
 
     buffer.seek(0)
     return buffer
@@ -933,11 +1180,20 @@ def restore_project_archive(project_file):
             else:
                 MODEL_STORE["uploaded_layers"][layer_name] = None
 
+        sequences = []
+        for member_name in archive.namelist():
+            if member_name.lower().startswith("sequences/") and member_name.lower().endswith(".txt"):
+                text = archive.read(member_name).decode("utf-8")
+                sequences.append(parse_sequence_text(text, os.path.basename(member_name)))
+
+        MODEL_STORE["sequences"] = sequences
+
         return {
             "model_crs": model_crs,
             "pipe_geojson": MODEL_STORE["pipe_geojson"],
             "hydrants": MODEL_STORE["uploaded_layers"]["hydrants"],
-            "valves": MODEL_STORE["uploaded_layers"]["valves"]
+            "valves": MODEL_STORE["uploaded_layers"]["valves"],
+            "sequences": sequences
         }
 
 
@@ -968,7 +1224,8 @@ def make_project_response():
         "model_crs": MODEL_STORE["model_crs"],
         "pipe_geojson": MODEL_STORE["pipe_geojson"],
         "hydrants": get_uploaded_layer_response(MODEL_STORE["uploaded_layers"]["hydrants"]),
-        "valves": get_uploaded_layer_response(MODEL_STORE["uploaded_layers"]["valves"])
+        "valves": get_uploaded_layer_response(MODEL_STORE["uploaded_layers"]["valves"]),
+        "sequences": MODEL_STORE.get("sequences", [])
     }
 
 

@@ -15,20 +15,19 @@
             <div class="toolbar-title">Project</div>
 
             <div class="toolbar-section toolbar-section-project" data-toolbar="project">
-                <div class="toolbar-upload-block">
+                <div class="toolbar-upload-block toolbar-layer-block">
                     <button id="loadModelBtn" class="tool-button" type="button">
                         <span class="tool-button-icon">📄</span>
                         <span class="tool-button-text">Load Model</span>
                         <span class="tool-button-subtext">.inp</span>
                     </button>
-
                     <div id="modelLoadStatus" class="toolbar-status"></div>
                 </div>
 
                 <div class="toolbar-upload-block toolbar-layer-block">
                     <button class="tool-button" type="button" data-upload-layer="hydrants">
                         <span class="tool-button-icon">●</span>
-                        <span class="tool-button-text">Hydrants</span>
+                        <span class="tool-button-text">Load Hydrants</span>
                         <span class="tool-button-subtext">Point shapefile</span>
                     </button>
                     <div class="toolbar-field-block" style="display:none;" id="hydrantsFieldSelector">
@@ -40,7 +39,7 @@
                 <div class="toolbar-upload-block toolbar-layer-block">
                     <button class="tool-button" type="button" data-upload-layer="valves">
                         <span class="tool-button-icon">◇</span>
-                        <span class="tool-button-text">Valves</span>
+                        <span class="tool-button-text">Load Valves</span>
                         <span class="tool-button-subtext">Point shapefile</span>
                     </button>
                     <div class="toolbar-field-block" style="display:none;" id="valvesFieldSelector">
@@ -48,6 +47,21 @@
                     </div>
                     <div id="valvesUploadStatus" class="toolbar-upload-status"></div>
                 </div>
+
+                <div class="toolbar-upload-block toolbar-layer-block">
+                    <button class="tool-button" type="button" data-upload-layer="sequences">
+                        <span class="tool-button-icon">◇</span>
+                        <span class="tool-button-text">Load Sequences</span>
+                        <span class="tool-button-subtext">.txt</span>
+                    </button>
+                    <div class="toolbar-field-block" style="display:none;" id="sequencesFieldSelector">
+                        <select id="sequencesIdFieldSelect" class="toolbar-input"></select>
+                    </div>
+                    <div id="sequencesUploadStatus" class="toolbar-upload-status"></div>
+                </div>
+
+                <div class="toolbar-spacer"></div>
+                <div class="toolbar-spacer"></div>
 
                 <div class="toolbar-upload-block toolbar-layer-block">
                     <button id="downloadProjectBtn" class="tool-button" type="button">
@@ -79,32 +93,21 @@
             </div>
 
             <div class="toolbar-section toolbar-section-valves hidden" data-toolbar="valves">
-
                 <div class="toolbar-upload-block toolbar-layer-block">
-                    <button class="tool-button" type="button" data-upload-layer="valves">
-                        <span class="tool-button-icon">◇</span>
-                        <span class="tool-button-text">Valves</span>
-                        <span class="tool-button-subtext">Point shapefile</span>
+                    <button id="snapValvesBtn" class="tool-button" type="button" disabled>
+                        <span class="tool-button-icon">📌</span>
+                        <span class="tool-button-text">Snap Valves</span>
+                        <span class="tool-button-subtext">Snap all valves to pipes</span>
                     </button>
-                    <div class="toolbar-field-block" style="display:none;" id="valvesFieldSelector">
-                        <select id="valvesIdFieldSelect" class="toolbar-input"></select>
-                    </div>
-                    <div id="valvesUploadStatus" class="toolbar-upload-status"></div>
+                    <div id="valvesSnapStatus" class="toolbar-upload-status"></div>
                 </div>
-
                 <div class="toolbar-spacer"></div>
             </div>
 
             <div class="toolbar-section toolbar-section-sequences hidden" data-toolbar="sequences">
-                <div class="toolbar-upload-block">
-                    <button id="manageSequencesBtn" class="tool-button" type="button">
-                        <span class="tool-button-icon">🔁</span>
-                        <span class="tool-button-text">Sequences</span>
-                        <span class="tool-button-subtext">Manage</span>
-                    </button>
-                    <div id="sequencesStatus" class="toolbar-upload-status"></div>
-                </div>
-
+                <div id="sequenceLoaderStatus" class="toolbar-upload-status"></div>
+                <div id="sequenceTabs" class="sequence-tabs"></div>
+                <div id="sequencePanels" class="sequence-panels"></div>
                 <div class="toolbar-spacer"></div>
             </div>
         </aside>
@@ -116,6 +119,7 @@
                     <button type="button" class="sidebar-mode-button active" data-toolbar-target="project">Project</button>
                     <button type="button" class="sidebar-mode-button" data-toolbar-target="hydrants">Hydrants</button>
                     <button type="button" class="sidebar-mode-button" data-toolbar-target="valves">Valves</button>
+                    <button type="button" class="sidebar-mode-button" data-toolbar-target="sequences">Sequences</button>
                 </div>
             </div>
         </main>
