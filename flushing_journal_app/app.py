@@ -38,7 +38,8 @@ MODEL_STORE = {
         "valves": None,
         "hydrants": None
     },
-    "sequences": []
+    "sequences": [],
+    "snapshots": {}
 }
 
 
@@ -97,20 +98,72 @@ def upload_model():
             model_crs=model_crs
         )
 
+        # If a model_timestep was supplied, attempt to run the simulation up to that hour
+        model_timestep = 0.0
+        try:
+            mt_str = request.form.get('model_timestep', '').strip()
+            if mt_str:
+                model_timestep = float(mt_str)
+        except Exception:
+            model_timestep = 0.0
+
+        snapshot_saved = False
+        snapshot_id = None
+        snapshot_message = None
+
+        if model_timestep and model_timestep > 0:
+            try:
+                # Set duration to the requested timestep (in seconds)
+                duration_seconds = int(max(0, min(23.75, model_timestep)) * 3600)
+                wn.options.time.duration = duration_seconds
+
+                # Run the simulator (WNTR pure Python simulator)
+                sim = wntr.sim.WNTRSimulator(wn)
+                results = sim.run_sim()
+
+                # Save a pickled snapshot of the model and results so it can be reused later
+                snapshot_key = f"{model_timestep:.2f}h"
+                snapshot_obj = {
+                    'model_timestep_hours': model_timestep,
+                    'wn_pickle': pickle.dumps(wn),
+                    'results_pickle': pickle.dumps(results)
+                }
+                MODEL_STORE['snapshots'][snapshot_key] = snapshot_obj
+                snapshot_saved = True
+                snapshot_id = snapshot_key
+                # Optionally write an inp file snapshot for debugging/inspection
+                try:
+                    snapshot_inp = os.path.join(app.config['UPLOAD_FOLDER'], f"{secure_filename(filename)}.snapshot_{int(model_timestep*100)}.inp")
+                    wntr.network.write_inpfile(wn, snapshot_inp)
+                except Exception:
+                    pass
+            except Exception as run_exc:
+                snapshot_message = f"Model run to {model_timestep} h failed: {str(run_exc)}"
+                print(traceback.format_exc())
+
         print(f"[DEBUG] Model CRS: {model_crs}")
 
         MODEL_STORE["wn"] = wn
         MODEL_STORE["inp_path"] = inp_path
         MODEL_STORE["model_crs"] = model_crs
         MODEL_STORE["pipe_geojson"] = pipe_geojson
-
-        return jsonify({
+        response = {
             "success": True,
             "message": "Model loaded successfully.",
             "model_crs": model_crs,
-            "pipe_count": len(pipe_geojson["features"]),
+            "pipe_count": len(pipe_geojson.get("features", [])),
             "pipe_geojson": pipe_geojson
-        })
+        }
+
+        if snapshot_saved:
+            response['model_timestep'] = model_timestep
+            response['snapshot_id'] = snapshot_id
+            response['snapshot_message'] = snapshot_message or f"Snapshot saved at {model_timestep} h"
+        elif snapshot_message:
+            response['model_timestep'] = model_timestep
+            response['snapshot_message'] = snapshot_message
+
+        return jsonify(response)
 
     except Exception as exc:
         print(traceback.format_exc())
@@ -823,6 +876,38 @@ def upload_sequences():
         }), 500
 
 
+@app.route("/save_sequences", methods=["POST"])
+def save_sequences():
+    try:
+        data = request.get_json(silent=True) or {}
+        sequences = data.get("sequences")
+
+        if sequences is None:
+            return jsonify({
+                "success": False,
+                "message": "No sequences were provided."
+            }), 400
+
+        if not isinstance(sequences, list):
+            return jsonify({
+                "success": False,
+                "message": "Sequences must be an array."
+            }), 400
+
+        MODEL_STORE["sequences"] = sequences
+
+        return jsonify({
+            "success": True,
+            "message": "Sequences saved."
+        })
+    except Exception as exc:
+        print(traceback.format_exc())
+        return jsonify({
+            "success": False,
+            "message": str(exc)
+        }), 500
+
+
 def parse_sequence_text(text, filename=None):
     sequence = {
         "name": filename[:-4] if filename and filename.lower().endswith(".txt") else (filename or "Sequence"),
@@ -852,11 +937,11 @@ def parse_sequence_text(text, filename=None):
         target_velocity = ""
         map_message = ""
 
-        open_valves_match = re.search(r">([^<]*)<", block)
+        open_valves_match = re.search(r">([^<>]*)<", block)
         if open_valves_match:
             open_valves = [val.strip() for val in open_valves_match.group(1).split(",") if val.strip()]
 
-        close_valves_match = re.search(r"<([^>]*)>", block)
+        close_valves_match = re.search(r"<([^<>]*)>", block)
         if close_valves_match:
             close_valves = [val.strip() for val in close_valves_match.group(1).split(",") if val.strip()]
 
@@ -935,7 +1020,7 @@ def point_shapefile_to_geojson(shp_path, source_crs=None):
 
     gdf = gpd.read_file(shp_path)
     
-    print(f"[DEBUG] Shapefile loaded. Current CRS: {gdf.crs}")
+    print(f"[DEBUG] Current CRS: {gdf.crs}")
     print(f"[DEBUG] Source CRS provided: {source_crs}")
     print(f"[DEBUG] Sample coordinates before transformation: {gdf.geometry.iloc[0] if len(gdf) > 0 else 'No geometries'}")
 
@@ -1335,6 +1420,11 @@ def water_network_pipes_to_geojson(wn, model_crs):
             lon, lat = transformer.transform(x, y)
             transformed_coords.append([lon, lat])
 
+        diameter_meters = safe_float(getattr(pipe, "diameter", None))
+        diameter_inches = None
+        if diameter_meters is not None:
+            diameter_inches = diameter_meters * 39.37007874015748
+
         feature = {
             "type": "Feature",
             "properties": {
@@ -1343,7 +1433,8 @@ def water_network_pipes_to_geojson(wn, model_crs):
                 "start_node": pipe.start_node_name,
                 "end_node": pipe.end_node_name,
                 "length": safe_float(getattr(pipe, "length", None)),
-                "diameter": safe_float(getattr(pipe, "diameter", None)),
+                "diameter_meters": diameter_meters,
+                "diameter": diameter_inches,
                 "roughness": safe_float(getattr(pipe, "roughness", None)),
                 "status": str(getattr(pipe, "status", ""))
             },

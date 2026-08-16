@@ -106,8 +106,73 @@
 
             <div class="toolbar-section toolbar-section-sequences hidden" data-toolbar="sequences">
                 <div id="sequenceLoaderStatus" class="toolbar-upload-status"></div>
-                <div id="sequenceTabs" class="sequence-tabs"></div>
-                <div id="sequencePanels" class="sequence-panels"></div>
+                <div class="sequence-toolbar">
+                    <button id="addSequenceBtn" class="sequence-action-button" type="button">+ Add Sequence</button>
+                </div>
+                <div class="sequence-content">
+                    <div id="sequenceTabs" class="sequence-tabs"></div>
+                    <div id="sequencePanels" class="sequence-panels"></div>
+                </div>
+                <div class="sequence-run-controls">
+                    <button id="runCurrentSequenceBtn" class="sequence-action-button sequence-run-button" type="button">Run Current</button>
+                    <button id="runAllSequencesBtn" class="sequence-action-button sequence-run-button primary" type="button">Run All</button>
+                </div>
+            </div>
+
+            <div class="toolbar-section toolbar-section-options hidden" data-toolbar="options">
+                <div class="toolbar-upload-block toolbar-layer-block">
+                    <label class="toolbar-label" for="modelTimestepInput">Model Timestep (hour)</label>
+                    <input id="modelTimestepInput" class="toolbar-input" type="number" min="0" max="23.75" step="0.25" value="0" />
+                    <div id="optionsStatus" class="toolbar-status"></div>
+                </div>
+
+                <div class="toolbar-upload-block toolbar-layer-block">
+                    <label class="toolbar-label" for="presDropWarningLimitInput">Pressure drop warning limit (psi)</label>
+                    <input id="presDropWarningLimitInput" class="toolbar-input" type="number" step="0.1" value="10.0" />
+
+                    <label class="toolbar-label" for="defaultOrificeDiamInput">Default orifice diameter (in)</label>
+                    <input id="defaultOrificeDiamInput" class="toolbar-input" type="number" step="0.01" value="2.5" />
+
+                    <label class="toolbar-label" for="volumeTurnoversInput">Volume turnovers</label>
+                    <input id="volumeTurnoversInput" class="toolbar-input" type="number" step="0.1" value="3.0" />
+
+                    <label class="toolbar-label" for="maxFlushDiamInput">Max flush diameter (in)</label>
+                    <input id="maxFlushDiamInput" class="toolbar-input" type="number" step="0.1" value="20.0" />
+
+                    <label class="toolbar-label" for="maxFlushLengthInput">Max flush length (ft)</label>
+                    <input id="maxFlushLengthInput" class="toolbar-input" type="number" step="1" value="5280" />
+
+                    <label class="toolbar-label" for="lateralDiamInput">Lateral diameter (in)</label>
+                    <input id="lateralDiamInput" class="toolbar-input" type="number" step="0.01" value="5.99" />
+
+                    <label class="toolbar-label" for="lateralRoughnessInput">Lateral roughness</label>
+                    <input id="lateralRoughnessInput" class="toolbar-input" type="number" step="0.01" value="1.0" />
+
+                    <label class="toolbar-label" for="outletCoeffInput">Outlet coefficient</label>
+                    <input id="outletCoeffInput" class="toolbar-input" type="number" step="0.01" value="0.9" />
+
+                    <label class="toolbar-label" for="hoseLengthInput">Hose length (ft)</label>
+                    <input id="hoseLengthInput" class="toolbar-input" type="number" step="0.1" value="15" />
+
+                    <label class="toolbar-label" for="hoseRoughnessInput">Hose roughness</label>
+                    <input id="hoseRoughnessInput" class="toolbar-input" type="number" step="0.01" value="1.0" />
+
+                    <label class="toolbar-label" for="minFlushVelInput">Min flush velocity (fps)</label>
+                    <input id="minFlushVelInput" class="toolbar-input" type="number" step="0.1" value="5.0" />
+
+                    <label class="toolbar-label" for="maxFlushVelInput">Max flush velocity (fps)</label>
+                    <input id="maxFlushVelInput" class="toolbar-input" type="number" step="0.1" value="10.0" />
+
+                    <label class="toolbar-label" for="minResPresInput">Min residual pressure (psi)</label>
+                    <input id="minResPresInput" class="toolbar-input" type="number" step="0.1" value="20" />
+
+                    <label class="toolbar-label" for="searchDistInput">Search distance (ft)</label>
+                    <input id="searchDistInput" class="toolbar-input" type="number" step="0.1" value="120.0" />
+
+                    <label class="toolbar-label" for="startVelToFlushingVelRatioInput">Start-to-flush velocity ratio</label>
+                    <input id="startVelToFlushingVelRatioInput" class="toolbar-input" type="number" step="0.1" value="3.0" />
+                </div>
+
                 <div class="toolbar-spacer"></div>
             </div>
         </aside>
@@ -120,6 +185,7 @@
                     <button type="button" class="sidebar-mode-button" data-toolbar-target="hydrants">Hydrants</button>
                     <button type="button" class="sidebar-mode-button" data-toolbar-target="valves">Valves</button>
                     <button type="button" class="sidebar-mode-button" data-toolbar-target="sequences">Sequences</button>
+                    <button type="button" class="sidebar-mode-button" data-toolbar-target="options">Options</button>
                 </div>
             </div>
         </main>
@@ -132,10 +198,39 @@
             <p class="modal-copy">Choose the coordinate reference system for the uploaded EPANET model.</p>
             <label class="modal-label" for="epsgInput">EPSG Code</label>
             <input id="epsgInput" class="modal-input" type="text" value="26912" placeholder="26912 or EPSG:26912" />
+                <label class="modal-label" for="epsgTimestepInput">Run to timestep (hours)</label>
+                <input id="epsgTimestepInput" class="modal-input" type="number" min="0" max="23.75" step="0.25" value="0" />
             <div id="epsgModalError" class="modal-error" aria-live="polite"></div>
             <div class="modal-actions">
                 <button id="cancelEpsgModal" class="modal-button secondary" type="button">Cancel</button>
                 <button id="confirmEpsgModal" class="modal-button primary" type="button">Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+        <div class="modal-card">
+            <button id="closeConfirmModal" class="modal-close" type="button" aria-label="Close">×</button>
+            <h3 id="confirmModalTitle">Confirm Delete</h3>
+            <p id="confirmModalMessage" class="modal-copy"></p>
+            <div class="modal-actions">
+                <button id="cancelConfirmModal" class="modal-button secondary" type="button">Cancel</button>
+                <button id="confirmConfirmModal" class="modal-button" type="button">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="renameModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="renameModalTitle">
+        <div class="modal-card">
+            <button id="closeRenameModal" class="modal-close" type="button" aria-label="Close">×</button>
+            <h3 id="renameModalTitle">Rename Item</h3>
+            <p id="renameModalMessage" class="modal-copy">Use this dialog to change the name.</p>
+            <label class="modal-label" for="renameModalInput">New Name</label>
+            <input id="renameModalInput" class="modal-input" type="text" />
+            <div id="renameModalError" class="modal-error" aria-live="polite"></div>
+            <div class="modal-actions">
+                <button id="cancelRenameModal" class="modal-button secondary" type="button">Cancel</button>
+                <button id="confirmRenameModal" class="modal-button primary" type="button">Save</button>
             </div>
         </div>
     </div>
