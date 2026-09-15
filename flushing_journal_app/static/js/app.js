@@ -162,6 +162,9 @@ function initializeSequenceDialogs() {
     const renameModalInput = document.getElementById('renameModalInput');
     const renameModalError = document.getElementById('renameModalError');
 
+    const runAllSequencesBtn = document.getElementById('runAllSequencesBtn');
+    const runCurrentSequenceBtn = document.getElementById('runCurrentSequenceBtn');
+
     if (!confirmModal || !closeConfirmModal || !cancelConfirmModal || !confirmConfirmModal || !renameModal || !closeRenameModal || !cancelRenameModal || !confirmRenameModal || !renameModalTitle || !renameModalMessage || !renameModalInput || !renameModalError) {
         return;
     }
@@ -239,6 +242,53 @@ function initializeSequenceDialogs() {
             renameModalResolve = resolve;
         });
     }
+
+    async function sendSequencesToBackend(url, sequences, button, statusMessage) {
+        if (!Array.isArray(sequences) || sequences.length === 0) {
+            setSequenceStatus('No sequences are available to run.', true);
+            return;
+        }
+
+        if (button) {
+            button.disabled = true;
+        }
+        setSequenceStatus(statusMessage, false);
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ sequences: sequences })
+            });
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Failed to send sequences to the backend.');
+            }
+
+            setSequenceStatus(data.message || 'Sequences sent successfully.', false);
+        } catch (error) {
+            console.error(error);
+            setSequenceStatus(error.message || 'Failed to send sequences.', true);
+        } finally {
+            if (button) {
+                button.disabled = false;
+            }
+        }
+    }
+
+    runAllSequencesBtn?.addEventListener('click', async function () {
+        const sequencesToRun = currentSequences;
+        await sendSequencesToBackend('/run_sequences', sequencesToRun, runAllSequencesBtn, 'Sending all sequences...');
+    });
+
+    runCurrentSequenceBtn?.addEventListener('click', async function () {
+        const currentSequence = currentSequences[activeSequenceIndex];
+        const sequencesToRun = currentSequence ? [currentSequence] : [];
+        await sendSequencesToBackend('/run_sequence', sequencesToRun, runCurrentSequenceBtn, 'Sending current sequence...');
+    });
 
     window.showRenameDialog = showRenameDialog;
 }

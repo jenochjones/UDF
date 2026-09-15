@@ -12,11 +12,17 @@
 <body>
     <div class="app-shell">
         <aside class="left-toolbar">
-            <div class="toolbar-title">Project</div>
+            <div class="toolbar-title">
+                <div class="toolbar-brand-mark" aria-hidden="true">FJ</div>
+                <div>
+                    <div class="toolbar-title-kicker">Workspace</div>
+                    <div class="toolbar-title-name">Flushing Journal</div>
+                </div>
+            </div>
 
             <div class="toolbar-section toolbar-section-project" data-toolbar="project">
                 <div class="toolbar-upload-block toolbar-layer-block">
-                    <button id="loadModelBtn" class="tool-button" type="button">
+                    <button id="loadModelBtn" class="tool-button" type="button" aria-label="Load an EPANET model">
                         <span class="tool-button-icon">📄</span>
                         <span class="tool-button-text">Load Model</span>
                         <span class="tool-button-subtext">.inp</span>
@@ -120,6 +126,10 @@
             </div>
 
             <div class="toolbar-section toolbar-section-options hidden" data-toolbar="options">
+                <div class="toolbar-section-heading">
+                    <span class="toolbar-section-kicker">Configuration</span>
+                    <span class="toolbar-section-title">Model options</span>
+                </div>
                 <div class="toolbar-upload-block toolbar-layer-block">
                     <label class="toolbar-label" for="modelTimestepInput">Model Timestep (hour)</label>
                     <input id="modelTimestepInput" class="toolbar-input" type="number" min="0" max="23.75" step="0.25" value="0" />
@@ -180,7 +190,7 @@
         <main class="main-area">
             <div id="map"></div>
             <div id="footer">
-                <div class="bottom-toolbar">
+                <div class="bottom-toolbar" aria-label="Workspace sections">
                     <button type="button" class="sidebar-mode-button active" data-toolbar-target="project">Project</button>
                     <button type="button" class="sidebar-mode-button" data-toolbar-target="hydrants">Hydrants</button>
                     <button type="button" class="sidebar-mode-button" data-toolbar-target="valves">Valves</button>

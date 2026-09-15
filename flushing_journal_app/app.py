@@ -908,6 +908,66 @@ def save_sequences():
         }), 500
 
 
+def receive_sequence_run_request(expected_count=None):
+    data = request.get_json(silent=True) or {}
+    sequences = data.get("sequences")
+
+    if not isinstance(sequences, list):
+        return None, (jsonify({
+            "success": False,
+            "message": "Sequences must be an array."
+        }), 400)
+
+    if not sequences:
+        return None, (jsonify({
+            "success": False,
+            "message": "At least one sequence is required."
+        }), 400)
+
+    if expected_count is not None and len(sequences) != expected_count:
+        return None, (jsonify({
+            "success": False,
+            "message": f"Exactly {expected_count} sequence is required."
+        }), 400)
+
+    for sequence in sequences:
+        if not isinstance(sequence, dict) or not isinstance(sequence.get("operations"), list):
+            return None, (jsonify({
+                "success": False,
+                "message": "Each sequence must include an operations array."
+            }), 400)
+
+    return sequences, None
+
+
+@app.route("/run_sequences", methods=["POST"])
+def run_sequences():
+    sequences, error = receive_sequence_run_request()
+    if error:
+        return error
+
+    MODEL_STORE["sequences"] = sequences
+    return jsonify({
+        "success": True,
+        "message": f"Received {len(sequences)} sequence(s) for processing.",
+        "sequences": sequences
+    })
+
+
+@app.route("/run_sequence", methods=["POST"])
+def run_sequence():
+    sequences, error = receive_sequence_run_request(expected_count=1)
+    if error:
+        return error
+
+    MODEL_STORE["sequences"] = sequences
+    return jsonify({
+        "success": True,
+        "message": "Received the current sequence for processing.",
+        "sequences": sequences
+    })
+
+
 def parse_sequence_text(text, filename=None):
     sequence = {
         "name": filename[:-4] if filename and filename.lower().endswith(".txt") else (filename or "Sequence"),
