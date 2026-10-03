@@ -16,7 +16,6 @@ import pickle
 import zipfile
 from shapely.geometry import shape, Point, LineString
 
-
 app = Flask(__name__)
 
 # Spyder-friendly hard-coded settings
@@ -34,12 +33,9 @@ MODEL_STORE = {
     "inp_path": None,
     "model_crs": None,
     "pipe_geojson": None,
-    "uploaded_layers": {
-        "valves": None,
-        "hydrants": None
-    },
+    "uploaded_layers": {"valves": None, "hydrants": None},
     "sequences": [],
-    "snapshots": {}
+    "snapshots": {},
 }
 
 
@@ -57,10 +53,15 @@ def upload_model():
 
     try:
         if "inp_file" not in request.files:
-            return jsonify({
-                "success": False,
-                "message": "No inp_file was included in the request."
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "No inp_file was included in the request.",
+                    }
+                ),
+                400,
+            )
 
         inp_file = request.files["inp_file"]
         model_crs = request.form.get("model_crs", "").strip()
@@ -68,24 +69,31 @@ def upload_model():
             model_crs = f"EPSG:{model_crs}"
 
         if inp_file.filename == "":
-            return jsonify({
-                "success": False,
-                "message": "No file was selected."
-            }), 400
+            return jsonify({"success": False, "message": "No file was selected."}), 400
 
         if not model_crs:
-            return jsonify({
-                "success": False,
-                "message": "Model CRS is required. Example: EPSG:26912"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Model CRS is required. Example: EPSG:26912",
+                    }
+                ),
+                400,
+            )
 
         filename = secure_filename(inp_file.filename)
 
         if not filename.lower().endswith(".inp"):
-            return jsonify({
-                "success": False,
-                "message": "The selected file must be an EPANET .inp file."
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "The selected file must be an EPANET .inp file.",
+                    }
+                ),
+                400,
+            )
 
         inp_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         inp_file.save(inp_path)
@@ -93,15 +101,12 @@ def upload_model():
         # Load the EPANET model into WNTR and store it for later use.
         wn = wntr.network.WaterNetworkModel(inp_path)
 
-        pipe_geojson = water_network_pipes_to_geojson(
-            wn=wn,
-            model_crs=model_crs
-        )
+        pipe_geojson = water_network_pipes_to_geojson(wn=wn, model_crs=model_crs)
 
         # If a model_timestep was supplied, attempt to run the simulation up to that hour
         model_timestep = 0.0
         try:
-            mt_str = request.form.get('model_timestep', '').strip()
+            mt_str = request.form.get("model_timestep", "").strip()
             if mt_str:
                 model_timestep = float(mt_str)
         except Exception:
@@ -124,21 +129,26 @@ def upload_model():
                 # Save a pickled snapshot of the model and results so it can be reused later
                 snapshot_key = f"{model_timestep:.2f}h"
                 snapshot_obj = {
-                    'model_timestep_hours': model_timestep,
-                    'wn_pickle': pickle.dumps(wn),
-                    'results_pickle': pickle.dumps(results)
+                    "model_timestep_hours": model_timestep,
+                    "wn_pickle": pickle.dumps(wn),
+                    "results_pickle": pickle.dumps(results),
                 }
-                MODEL_STORE['snapshots'][snapshot_key] = snapshot_obj
+                MODEL_STORE["snapshots"][snapshot_key] = snapshot_obj
                 snapshot_saved = True
                 snapshot_id = snapshot_key
                 # Optionally write an inp file snapshot for debugging/inspection
                 try:
-                    snapshot_inp = os.path.join(app.config['UPLOAD_FOLDER'], f"{secure_filename(filename)}.snapshot_{int(model_timestep*100)}.inp")
+                    snapshot_inp = os.path.join(
+                        app.config["UPLOAD_FOLDER"],
+                        f"{secure_filename(filename)}.snapshot_{int(model_timestep*100)}.inp",
+                    )
                     wntr.network.write_inpfile(wn, snapshot_inp)
                 except Exception:
                     pass
             except Exception as run_exc:
-                snapshot_message = f"Model run to {model_timestep} h failed: {str(run_exc)}"
+                snapshot_message = (
+                    f"Model run to {model_timestep} h failed: {str(run_exc)}"
+                )
                 print(traceback.format_exc())
 
         print(f"[DEBUG] Model CRS: {model_crs}")
@@ -152,25 +162,24 @@ def upload_model():
             "message": "Model loaded successfully.",
             "model_crs": model_crs,
             "pipe_count": len(pipe_geojson.get("features", [])),
-            "pipe_geojson": pipe_geojson
+            "pipe_geojson": pipe_geojson,
         }
 
         if snapshot_saved:
-            response['model_timestep'] = model_timestep
-            response['snapshot_id'] = snapshot_id
-            response['snapshot_message'] = snapshot_message or f"Snapshot saved at {model_timestep} h"
+            response["model_timestep"] = model_timestep
+            response["snapshot_id"] = snapshot_id
+            response["snapshot_message"] = (
+                snapshot_message or f"Snapshot saved at {model_timestep} h"
+            )
         elif snapshot_message:
-            response['model_timestep'] = model_timestep
-            response['snapshot_message'] = snapshot_message
+            response["model_timestep"] = model_timestep
+            response["snapshot_message"] = snapshot_message
 
         return jsonify(response)
 
     except Exception as exc:
         print(traceback.format_exc())
-        return jsonify({
-            "success": False,
-            "message": str(exc)
-        }), 500
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 @app.route("/model_pipes", methods=["GET"])
@@ -180,15 +189,12 @@ def model_pipes():
     """
 
     if MODEL_STORE["pipe_geojson"] is None:
-        return jsonify({
-            "success": False,
-            "message": "No model has been loaded yet."
-        }), 404
+        return (
+            jsonify({"success": False, "message": "No model has been loaded yet."}),
+            404,
+        )
 
-    return jsonify({
-        "success": True,
-        "pipe_geojson": MODEL_STORE["pipe_geojson"]
-    })
+    return jsonify({"success": True, "pipe_geojson": MODEL_STORE["pipe_geojson"]})
 
 
 @app.route("/download_project", methods=["GET"])
@@ -197,10 +203,7 @@ def download_project():
         return send_project_archive()
     except Exception as exc:
         print(traceback.format_exc())
-        return jsonify({
-            "success": False,
-            "message": str(exc)
-        }), 500
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 @app.route("/upload_project", methods=["POST"])
@@ -208,21 +211,20 @@ def upload_project():
     try:
         result = restore_project_request(request.files)
 
-        return jsonify({
-            "success": True,
-            "message": "Project loaded successfully.",
-            "model_crs": result["model_crs"],
-            "pipe_geojson": result["pipe_geojson"],
-            "hydrants": result["hydrants"],
-            "valves": result["valves"],
-            "sequences": result.get("sequences", [])
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": "Project loaded successfully.",
+                "model_crs": result["model_crs"],
+                "pipe_geojson": result["pipe_geojson"],
+                "hydrants": result["hydrants"],
+                "valves": result["valves"],
+                "sequences": result.get("sequences", []),
+            }
+        )
     except Exception as exc:
         print(traceback.format_exc())
-        return jsonify({
-            "success": False,
-            "message": str(exc)
-        }), 500
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 @app.route("/connect_hydrants", methods=["POST"])
@@ -296,33 +298,42 @@ def connect_hydrants():
             coords.append(current_end_coords)
 
             if len(coords) >= 2:
-                geometries.append({
-                    "name": current_pipe_name,
-                    "geometry": LineString(coords)
-                })
+                geometries.append(
+                    {"name": current_pipe_name, "geometry": LineString(coords)}
+                )
 
         return geometries
 
     # Connect each uploaded hydrant to the nearest pipe in the loaded WNTR model.
     try:
         if MODEL_STORE["wn"] is None:
-            return jsonify({
-                "success": False,
-                "message": "No model has been loaded yet."
-            }), 400
+            return (
+                jsonify({"success": False, "message": "No model has been loaded yet."}),
+                400,
+            )
 
         hydrants_layer = MODEL_STORE["uploaded_layers"].get("hydrants")
         if not hydrants_layer or not hydrants_layer["geojson"].get("features"):
-            return jsonify({
-                "success": False,
-                "message": "No hydrants shapefile has been uploaded."
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "No hydrants shapefile has been uploaded.",
+                    }
+                ),
+                400,
+            )
 
         if MODEL_STORE["pipe_geojson"] is None:
-            return jsonify({
-                "success": False,
-                "message": "No model pipe geometry is available."
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "No model pipe geometry is available.",
+                    }
+                ),
+                400,
+            )
 
         wn = MODEL_STORE["wn"]
         model_crs = MODEL_STORE["model_crs"]
@@ -342,15 +353,18 @@ def connect_hydrants():
         pipe_geometries = build_pipe_geometries(wn)
 
         if not pipe_geometries:
-            return jsonify({
-                "success": False,
-                "message": "The loaded model contains no pipe geometries."
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "The loaded model contains no pipe geometries.",
+                    }
+                ),
+                400,
+            )
 
         transformer_to_model = Transformer.from_crs(
-            "EPSG:4326",
-            model_crs,
-            always_xy=True
+            "EPSG:4326", model_crs, always_xy=True
         )
 
         hydrant_id_field = hydrants_layer.get("id_field")
@@ -374,8 +388,7 @@ def connect_hydrants():
                 hydrant_point_4326 = hydrant_geom_4326.centroid
 
             x_hyd, y_hyd = transformer_to_model.transform(
-                hydrant_point_4326.x,
-                hydrant_point_4326.y
+                hydrant_point_4326.x, hydrant_point_4326.y
             )
             hydrant_point = Point(x_hyd, y_hyd)
 
@@ -397,7 +410,7 @@ def connect_hydrants():
 
             nearest_pipe = min(
                 pipe_geometries,
-                key=lambda item: hydrant_point.distance(item["geometry"])
+                key=lambda item: hydrant_point.distance(item["geometry"]),
             )
 
             pipe_name = nearest_pipe["name"]
@@ -458,7 +471,7 @@ def connect_hydrants():
                     pipe_name_to_split=pipe_name,
                     new_pipe_name=new_pipe_name,
                     new_junction_name=connection_node_name,
-                    split_at_point=split_fraction
+                    split_at_point=split_fraction,
                 )
 
                 pipe_base_names[pipe_name] = base_pipe_name
@@ -469,7 +482,9 @@ def connect_hydrants():
 
                 start_elev = start_node.elevation
                 end_elev = end_node.elevation
-                connection_elevation = start_elev + split_fraction * (end_elev - start_elev)
+                connection_elevation = start_elev + split_fraction * (
+                    end_elev - start_elev
+                )
                 connection_node.elevation = connection_elevation
 
                 pipe_geometries = build_pipe_geometries(wn)
@@ -482,13 +497,12 @@ def connect_hydrants():
                     hydrant_junction_name,
                     base_demand=0.0,
                     elevation=connection_elevation,
-                    coordinates=(x_hyd, y_hyd)
+                    coordinates=(x_hyd, y_hyd),
                 )
 
             hydrant_pipe_base_name = f"{hydrant_junction_name}_pipe"
             hydrant_pipe_name = make_unique_link_name(
-                f"{hydrant_pipe_base_name}_{uuid.uuid4().hex[:6]}",
-                wn
+                f"{hydrant_pipe_base_name}_{uuid.uuid4().hex[:6]}", wn
             )
 
             hydrant_pipe_length = float(split_pt.distance(Point(x_hyd, y_hyd)))
@@ -503,49 +517,74 @@ def connect_hydrants():
                 diameter=0.1524,
                 roughness=100.0,
                 minor_loss=0.0,
-                initial_status="OPEN"
+                initial_status="OPEN",
             )
 
             connected_count += 1
 
         MODEL_STORE["pipe_geojson"] = water_network_pipes_to_geojson(
-            wn=wn,
-            model_crs=model_crs
+            wn=wn, model_crs=model_crs
         )
-        
+
         MODEL_STORE["wn"] = wn
 
         if MODEL_STORE["inp_path"]:
             wntr.network.write_inpfile(wn, MODEL_STORE["inp_path"])
 
-        return jsonify({
-            "success": True,
-            "message": "Hydrants have been connected to the model.",
-            "connected_count": connected_count,
-            "skipped_count": skipped_count,
-            "pipe_geojson": MODEL_STORE["pipe_geojson"]
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": "Hydrants have been connected to the model.",
+                "connected_count": connected_count,
+                "skipped_count": skipped_count,
+                "pipe_geojson": MODEL_STORE["pipe_geojson"],
+            }
+        )
     except Exception as exc:
         print(traceback.format_exc())
-        return jsonify({
-            "success": False,
-            "message": str(exc)
-        }), 500
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 @app.route("/snap_valves", methods=["POST"])
 def snap_valves():
     try:
         if MODEL_STORE["pipe_geojson"] is None:
-            return jsonify({"success": False, "message": "No model has been loaded yet."}), 400
+            return (
+                jsonify({"success": False, "message": "No model has been loaded yet."}),
+                400,
+            )
 
         valves_layer = MODEL_STORE["uploaded_layers"].get("valves")
-        if not valves_layer or not valves_layer.get("geojson") or not valves_layer["geojson"].get("features"):
-            return jsonify({"success": False, "message": "No valves shapefile has been uploaded."}), 400
+        if (
+            not valves_layer
+            or not valves_layer.get("geojson")
+            or not valves_layer["geojson"].get("features")
+        ):
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "No valves shapefile has been uploaded.",
+                    }
+                ),
+                400,
+            )
 
-        pipe_features = [feature for feature in MODEL_STORE["pipe_geojson"].get("features", []) if feature.get("geometry")]
+        pipe_features = [
+            feature
+            for feature in MODEL_STORE["pipe_geojson"].get("features", [])
+            if feature.get("geometry")
+        ]
         if not pipe_features:
-            return jsonify({"success": False, "message": "The loaded model does not contain any pipe geometries."}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "The loaded model does not contain any pipe geometries.",
+                    }
+                ),
+                400,
+            )
 
         features = valves_layer["geojson"].get("features", [])
         for feature in features:
@@ -569,7 +608,9 @@ def snap_valves():
                 distance = point.distance(pipe_geometry)
                 if best_distance is None or distance < best_distance:
                     best_distance = distance
-                    best_location = pipe_geometry.interpolate(pipe_geometry.project(point))
+                    best_location = pipe_geometry.interpolate(
+                        pipe_geometry.project(point)
+                    )
 
             if best_location is not None:
                 feature["geometry"]["coordinates"] = [best_location.x, best_location.y]
@@ -580,11 +621,24 @@ def snap_valves():
         shape_name = MODEL_STORE["uploaded_layers"]["valves"].get("shape_name")
         if save_dir and shape_name:
             try:
-                write_point_geojson_to_shapefile(save_dir, shape_name, {"type": "FeatureCollection", "features": features}, crs="EPSG:4326")
+                write_point_geojson_to_shapefile(
+                    save_dir,
+                    shape_name,
+                    {"type": "FeatureCollection", "features": features},
+                    crs="EPSG:4326",
+                )
             except Exception as e:
-                print("Warning: failed to write snapped valves shapefile back to disk:", e)
+                print(
+                    "Warning: failed to write snapped valves shapefile back to disk:", e
+                )
 
-        return jsonify({"success": True, "message": "Valves snapped to the closest pipes.", "geojson": {"type": "FeatureCollection", "features": features}})
+        return jsonify(
+            {
+                "success": True,
+                "message": "Valves snapped to the closest pipes.",
+                "geojson": {"type": "FeatureCollection", "features": features},
+            }
+        )
     except Exception as exc:
         print(traceback.format_exc())
         return jsonify({"success": False, "message": str(exc)}), 500
@@ -598,45 +652,59 @@ def set_layer_id_field():
         id_field = data.get("id_field", "").strip()
 
         if layer_type not in {"valves", "hydrants"}:
-            return jsonify({
-                "success": False,
-                "message": "Layer type must be valves or hydrants."
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Layer type must be valves or hydrants.",
+                    }
+                ),
+                400,
+            )
 
         layer = MODEL_STORE["uploaded_layers"].get(layer_type)
         if not layer or not layer.get("geojson"):
-            return jsonify({
-                "success": False,
-                "message": "No layer has been uploaded for that type."
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "No layer has been uploaded for that type.",
+                    }
+                ),
+                400,
+            )
 
         if not id_field:
-            return jsonify({
-                "success": False,
-                "message": "An ID field must be provided."
-            }), 400
+            return (
+                jsonify({"success": False, "message": "An ID field must be provided."}),
+                400,
+            )
 
         if id_field not in layer.get("fields", []):
-            return jsonify({
-                "success": False,
-                "message": "Selected ID field is not available in the uploaded layer."
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Selected ID field is not available in the uploaded layer.",
+                    }
+                ),
+                400,
+            )
 
         layer["id_field"] = id_field
 
-        return jsonify({
-            "success": True,
-            "message": "Layer ID field saved.",
-            "layer_type": layer_type,
-            "selected_id_field": id_field
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": "Layer ID field saved.",
+                "layer_type": layer_type,
+                "selected_id_field": id_field,
+            }
+        )
 
     except Exception as exc:
         print(traceback.format_exc())
-        return jsonify({
-            "success": False,
-            "message": str(exc)
-        }), 500
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 @app.route("/update_feature_geometry", methods=["POST"])
@@ -656,14 +724,38 @@ def update_feature_geometry():
         feature = data.get("feature")
 
         if layer_type not in {"hydrants", "valves"}:
-            return jsonify({"success": False, "message": "Layer type must be hydrants or valves."}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Layer type must be hydrants or valves.",
+                    }
+                ),
+                400,
+            )
 
         if not feature or not isinstance(feature, dict) or not feature.get("geometry"):
-            return jsonify({"success": False, "message": "A feature with geometry must be provided."}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "A feature with geometry must be provided.",
+                    }
+                ),
+                400,
+            )
 
         layer = MODEL_STORE["uploaded_layers"].get(layer_type)
         if not layer or not layer.get("geojson"):
-            return jsonify({"success": False, "message": "No uploaded layer found for that type."}), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "No uploaded layer found for that type.",
+                    }
+                ),
+                400,
+            )
 
         features = layer["geojson"].get("features", [])
 
@@ -681,7 +773,11 @@ def update_feature_geometry():
             for key in ("id", "ID", "name", "Name"):
                 for idx, f in enumerate(features):
                     props = f.get("properties") or {}
-                    if key in props and feature.get("properties") and props.get(key) == feature.get("properties").get(key):
+                    if (
+                        key in props
+                        and feature.get("properties")
+                        and props.get(key) == feature.get("properties").get(key)
+                    ):
                         matched_index = idx
                         break
                 if matched_index is not None:
@@ -711,7 +807,15 @@ def update_feature_geometry():
                 matched_index = None
 
         if matched_index is None:
-            return jsonify({"success": False, "message": "Could not locate matching feature to update."}), 404
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Could not locate matching feature to update.",
+                    }
+                ),
+                404,
+            )
 
         # Replace geometry (and optionally properties) for the matched feature
         features[matched_index]["geometry"] = feature.get("geometry")
@@ -727,7 +831,12 @@ def update_feature_geometry():
         shape_name = MODEL_STORE["uploaded_layers"][layer_type].get("shape_name")
         if save_dir and shape_name:
             try:
-                write_point_geojson_to_shapefile(save_dir, shape_name, {"type": "FeatureCollection", "features": features}, crs="EPSG:4326")
+                write_point_geojson_to_shapefile(
+                    save_dir,
+                    shape_name,
+                    {"type": "FeatureCollection", "features": features},
+                    crs="EPSG:4326",
+                )
             except Exception as e:
                 print("Warning: failed to write shapefile back to disk:", e)
 
@@ -749,22 +858,28 @@ def upload_shapefile():
         layer_type = request.form.get("layer_type", "").strip().lower()
 
         if layer_type not in {"valves", "hydrants"}:
-            return jsonify({
-                "success": False,
-                "message": "Layer type must be either valves or hydrants."
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Layer type must be either valves or hydrants.",
+                    }
+                ),
+                400,
+            )
 
         uploaded_files = request.files.getlist("shape_files")
         if not uploaded_files or all(file.filename == "" for file in uploaded_files):
-            return jsonify({
-                "success": False,
-                "message": "No shapefile files were provided."
-            }), 400
+            return (
+                jsonify(
+                    {"success": False, "message": "No shapefile files were provided."}
+                ),
+                400,
+            )
 
         shp_file = None
         save_dir = os.path.join(
-            app.config["UPLOAD_FOLDER"],
-            f"{layer_type}_{uuid.uuid4().hex[:8]}"
+            app.config["UPLOAD_FOLDER"], f"{layer_type}_{uuid.uuid4().hex[:8]}"
         )
         os.makedirs(save_dir, exist_ok=True)
 
@@ -779,18 +894,19 @@ def upload_shapefile():
                 shp_file = filename
 
         if not shp_file:
-            return jsonify({
-                "success": False,
-                "message": "A .shp file is required for upload."
-            }), 400
+            return (
+                jsonify(
+                    {"success": False, "message": "A .shp file is required for upload."}
+                ),
+                400,
+            )
 
         source_crs_value = request.form.get("source_crs", "").strip()
         selected_id_field = request.form.get("id_field", "").strip() or None
         shp_path = os.path.join(save_dir, shp_file)
-        
+
         geojson, field_names = point_shapefile_to_geojson(
-            shp_path=shp_path,
-            source_crs=source_crs_value or None
+            shp_path=shp_path, source_crs=source_crs_value or None
         )
 
         if selected_id_field and selected_id_field not in field_names:
@@ -809,26 +925,25 @@ def upload_shapefile():
             "geojson": geojson,
             "shape_name": shp_file,
             "fields": field_names,
-            "id_field": selected_id_field
+            "id_field": selected_id_field,
         }
-        print('Done')
+        print("Done")
 
-        return jsonify({
-            "success": True,
-            "message": f"{layer_type.title()} shapefile loaded successfully.",
-            "layer_type": layer_type,
-            "feature_count": len(geojson.get("features", [])),
-            "geojson": geojson,
-            "field_names": field_names,
-            "selected_id_field": selected_id_field
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": f"{layer_type.title()} shapefile loaded successfully.",
+                "layer_type": layer_type,
+                "feature_count": len(geojson.get("features", [])),
+                "geojson": geojson,
+                "field_names": field_names,
+                "selected_id_field": selected_id_field,
+            }
+        )
 
     except Exception as exc:
         print(traceback.format_exc())
-        return jsonify({
-            "success": False,
-            "message": str(exc)
-        }), 500
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 @app.route("/upload_sequences", methods=["POST"])
@@ -840,10 +955,12 @@ def upload_sequences():
     try:
         uploaded_files = request.files.getlist("sequence_files")
         if not uploaded_files or all(file.filename == "" for file in uploaded_files):
-            return jsonify({
-                "success": False,
-                "message": "No sequence files were provided."
-            }), 400
+            return (
+                jsonify(
+                    {"success": False, "message": "No sequence files were provided."}
+                ),
+                400,
+            )
 
         sequences = []
         for uploaded_file in uploaded_files:
@@ -852,10 +969,15 @@ def upload_sequences():
 
             filename = secure_filename(uploaded_file.filename)
             if not filename.lower().endswith(".txt"):
-                return jsonify({
-                    "success": False,
-                    "message": "Only .txt sequence files are supported."
-                }), 400
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": "Only .txt sequence files are supported.",
+                        }
+                    ),
+                    400,
+                )
 
             text = uploaded_file.stream.read().decode("utf-8", errors="replace")
             sequence = parse_sequence_text(text, filename)
@@ -863,17 +985,16 @@ def upload_sequences():
 
         MODEL_STORE["sequences"] = sequences
 
-        return jsonify({
-            "success": True,
-            "message": f"Loaded {len(sequences)} sequence file(s).",
-            "sequences": sequences
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Loaded {len(sequences)} sequence file(s).",
+                "sequences": sequences,
+            }
+        )
     except Exception as exc:
         print(traceback.format_exc())
-        return jsonify({
-            "success": False,
-            "message": str(exc)
-        }), 500
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 @app.route("/save_sequences", methods=["POST"])
@@ -883,29 +1004,23 @@ def save_sequences():
         sequences = data.get("sequences")
 
         if sequences is None:
-            return jsonify({
-                "success": False,
-                "message": "No sequences were provided."
-            }), 400
+            return (
+                jsonify({"success": False, "message": "No sequences were provided."}),
+                400,
+            )
 
         if not isinstance(sequences, list):
-            return jsonify({
-                "success": False,
-                "message": "Sequences must be an array."
-            }), 400
+            return (
+                jsonify({"success": False, "message": "Sequences must be an array."}),
+                400,
+            )
 
         MODEL_STORE["sequences"] = sequences
 
-        return jsonify({
-            "success": True,
-            "message": "Sequences saved."
-        })
+        return jsonify({"success": True, "message": "Sequences saved."})
     except Exception as exc:
         print(traceback.format_exc())
-        return jsonify({
-            "success": False,
-            "message": str(exc)
-        }), 500
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 def receive_sequence_run_request(expected_count=None):
@@ -913,29 +1028,43 @@ def receive_sequence_run_request(expected_count=None):
     sequences = data.get("sequences")
 
     if not isinstance(sequences, list):
-        return None, (jsonify({
-            "success": False,
-            "message": "Sequences must be an array."
-        }), 400)
+        return None, (
+            jsonify({"success": False, "message": "Sequences must be an array."}),
+            400,
+        )
 
     if not sequences:
-        return None, (jsonify({
-            "success": False,
-            "message": "At least one sequence is required."
-        }), 400)
+        return None, (
+            jsonify(
+                {"success": False, "message": "At least one sequence is required."}
+            ),
+            400,
+        )
 
     if expected_count is not None and len(sequences) != expected_count:
-        return None, (jsonify({
-            "success": False,
-            "message": f"Exactly {expected_count} sequence is required."
-        }), 400)
+        return None, (
+            jsonify(
+                {
+                    "success": False,
+                    "message": f"Exactly {expected_count} sequence is required.",
+                }
+            ),
+            400,
+        )
 
     for sequence in sequences:
-        if not isinstance(sequence, dict) or not isinstance(sequence.get("operations"), list):
-            return None, (jsonify({
-                "success": False,
-                "message": "Each sequence must include an operations array."
-            }), 400)
+        if not isinstance(sequence, dict) or not isinstance(
+            sequence.get("operations"), list
+        ):
+            return None, (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Each sequence must include an operations array.",
+                    }
+                ),
+                400,
+            )
 
     return sequences, None
 
@@ -943,15 +1072,18 @@ def receive_sequence_run_request(expected_count=None):
 @app.route("/run_sequences", methods=["POST"])
 def run_sequences():
     sequences, error = receive_sequence_run_request()
+    print(f"[DEBUG] Received sequences for run_sequences: {sequences}")
     if error:
         return error
 
     MODEL_STORE["sequences"] = sequences
-    return jsonify({
-        "success": True,
-        "message": f"Received {len(sequences)} sequence(s) for processing.",
-        "sequences": sequences
-    })
+    return jsonify(
+        {
+            "success": True,
+            "message": f"Received {len(sequences)} sequence(s) for processing.",
+            "sequences": sequences,
+        }
+    )
 
 
 @app.route("/run_sequence", methods=["POST"])
@@ -961,17 +1093,23 @@ def run_sequence():
         return error
 
     MODEL_STORE["sequences"] = sequences
-    return jsonify({
-        "success": True,
-        "message": "Received the current sequence for processing.",
-        "sequences": sequences
-    })
+    return jsonify(
+        {
+            "success": True,
+            "message": "Received the current sequence for processing.",
+            "sequences": sequences,
+        }
+    )
 
 
 def parse_sequence_text(text, filename=None):
     sequence = {
-        "name": filename[:-4] if filename and filename.lower().endswith(".txt") else (filename or "Sequence"),
-        "operations": []
+        "name": (
+            filename[:-4]
+            if filename and filename.lower().endswith(".txt")
+            else (filename or "Sequence")
+        ),
+        "operations": [],
     }
 
     if text is None:
@@ -999,11 +1137,19 @@ def parse_sequence_text(text, filename=None):
 
         open_valves_match = re.search(r">([^<>]*)<", block)
         if open_valves_match:
-            open_valves = [val.strip() for val in open_valves_match.group(1).split(",") if val.strip()]
+            open_valves = [
+                val.strip()
+                for val in open_valves_match.group(1).split(",")
+                if val.strip()
+            ]
 
         close_valves_match = re.search(r"<([^<>]*)>", block)
         if close_valves_match:
-            close_valves = [val.strip() for val in close_valves_match.group(1).split(",") if val.strip()]
+            close_valves = [
+                val.strip()
+                for val in close_valves_match.group(1).split(",")
+                if val.strip()
+            ]
 
         hydrants_match = re.search(r"\{([^}]*)\}", block)
         if hydrants_match:
@@ -1012,7 +1158,9 @@ def parse_sequence_text(text, filename=None):
                 parts = hydrants_value.split("*", 1)
                 hydrants_part = parts[0].strip()
                 if hydrants_part:
-                    open_hydrants = [val.strip() for val in hydrants_part.split(",") if val.strip()]
+                    open_hydrants = [
+                        val.strip() for val in hydrants_part.split(",") if val.strip()
+                    ]
                 if len(parts) > 1:
                     orifice_size = parts[1].strip()
 
@@ -1020,16 +1168,18 @@ def parse_sequence_text(text, filename=None):
         if map_message_match:
             map_message = map_message_match.group(1).strip()
 
-        sequence["operations"].append({
-            "name": operation_name,
-            "open_valves": open_valves,
-            "close_valves": close_valves,
-            "open_hydrants": open_hydrants,
-            "orifice_size": orifice_size,
-            "target_velocity": target_velocity,
-            "toggle_mode": "Orifice Size",
-            "map_message": map_message
-        })
+        sequence["operations"].append(
+            {
+                "name": operation_name,
+                "open_valves": open_valves,
+                "close_valves": close_valves,
+                "open_hydrants": open_hydrants,
+                "orifice_size": orifice_size,
+                "target_velocity": target_velocity,
+                "toggle_mode": "Orifice Size",
+                "map_message": map_message,
+            }
+        )
 
     return sequence
 
@@ -1079,16 +1229,15 @@ def point_shapefile_to_geojson(shp_path, source_crs=None):
         raise ValueError("Shapefile was not found on disk.")
 
     gdf = gpd.read_file(shp_path)
-    
+
     print(f"[DEBUG] Current CRS: {gdf.crs}")
     print(f"[DEBUG] Source CRS provided: {source_crs}")
-    print(f"[DEBUG] Sample coordinates before transformation: {gdf.geometry.iloc[0] if len(gdf) > 0 else 'No geometries'}")
+    print(
+        f"[DEBUG] Sample coordinates before transformation: {gdf.geometry.iloc[0] if len(gdf) > 0 else 'No geometries'}"
+    )
 
     if gdf.empty:
-        return {
-            "type": "FeatureCollection",
-            "features": []
-        }, []
+        return {"type": "FeatureCollection", "features": []}, []
 
     geometry_types = {geom_type.lower() for geom_type in gdf.geom_type.unique()}
     if not geometry_types.issubset({"point", "multipoint"}):
@@ -1116,28 +1265,36 @@ def point_shapefile_to_geojson(shp_path, source_crs=None):
         shapefile_crs_str = gdf.crs.to_string().upper()
         if not shapefile_crs_str.startswith("EPSG:"):
             shapefile_crs_str = f"EPSG:{shapefile_crs_str}"
-        
+
         if source_crs:
             norm_source = normalize_crs(source_crs)
-            print(f"[DEBUG] Comparing CRS: shapefile={shapefile_crs_str} vs provided={norm_source}")
+            print(
+                f"[DEBUG] Comparing CRS: shapefile={shapefile_crs_str} vs provided={norm_source}"
+            )
             if shapefile_crs_str != norm_source:
-                print(f"[DEBUG] CRS mismatch. Reprojecting from {shapefile_crs_str} to {norm_source}")
+                print(
+                    f"[DEBUG] CRS mismatch. Reprojecting from {shapefile_crs_str} to {norm_source}"
+                )
                 gdf = gdf.to_crs(norm_source)
             else:
                 print(f"[DEBUG] CRS already matches: {norm_source}")
 
     print(f"[DEBUG] After CRS handling, GDF CRS: {gdf.crs}")
-    print(f"[DEBUG] Sample coordinates after CRS handling: {gdf.geometry.iloc[0] if len(gdf) > 0 else 'No geometries'}")
-    
+    print(
+        f"[DEBUG] Sample coordinates after CRS handling: {gdf.geometry.iloc[0] if len(gdf) > 0 else 'No geometries'}"
+    )
+
     field_names = [col for col in gdf.columns if col.lower() != "geometry"]
     gdf_wgs84 = gdf.to_crs("EPSG:4326")
-    
-    print(f"[DEBUG] After conversion to EPSG:4326: {gdf_wgs84.geometry.iloc[0] if len(gdf_wgs84) > 0 else 'No geometries'}")
+
+    print(
+        f"[DEBUG] After conversion to EPSG:4326: {gdf_wgs84.geometry.iloc[0] if len(gdf_wgs84) > 0 else 'No geometries'}"
+    )
 
     for col in gdf_wgs84.columns:
         if gdf_wgs84[col].dtype != "str" and gdf_wgs84[col].dtype != "geometry":
             gdf_wgs84[col] = gdf_wgs84[col].astype(str)
-            
+
     geojson = json.loads(gdf_wgs84.to_json())
     geojson = make_json_serializable(geojson)
 
@@ -1162,13 +1319,12 @@ def write_point_geojson_to_shapefile(save_dir, shape_name, geojson, crs="EPSG:43
         clean_feature = {
             "type": "Feature",
             "geometry": feature.get("geometry"),
-            "properties": clean_props
+            "properties": clean_props,
         }
         clean_features.append(clean_feature)
 
     gdf = gpd.GeoDataFrame.from_features(
-        {"type": "FeatureCollection", "features": clean_features},
-        crs=crs
+        {"type": "FeatureCollection", "features": clean_features}, crs=crs
     )
     shp_out = os.path.join(save_dir, shape_name)
     gdf.to_file(shp_out)
@@ -1183,10 +1339,7 @@ def make_json_serializable(value):
     tokens NaN/Infinity, which causes JSON.parse() in the browser to fail.
     """
     if isinstance(value, dict):
-        return {
-            key: make_json_serializable(item)
-            for key, item in value.items()
-        }
+        return {key: make_json_serializable(item) for key, item in value.items()}
 
     if isinstance(value, (list, tuple)):
         return [make_json_serializable(item) for item in value]
@@ -1233,23 +1386,36 @@ def create_project_archive():
         "model_crs": MODEL_STORE["model_crs"],
         "uploaded_layers": {
             "hydrants": {
-                "id_field": MODEL_STORE["uploaded_layers"]["hydrants"].get("id_field")
-                if MODEL_STORE["uploaded_layers"]["hydrants"] else None
+                "id_field": (
+                    MODEL_STORE["uploaded_layers"]["hydrants"].get("id_field")
+                    if MODEL_STORE["uploaded_layers"]["hydrants"]
+                    else None
+                )
             },
             "valves": {
-                "id_field": MODEL_STORE["uploaded_layers"]["valves"].get("id_field")
-                if MODEL_STORE["uploaded_layers"]["valves"] else None
-            }
+                "id_field": (
+                    MODEL_STORE["uploaded_layers"]["valves"].get("id_field")
+                    if MODEL_STORE["uploaded_layers"]["valves"]
+                    else None
+                )
+            },
         },
-        "sequences": [sequence.get("name") for sequence in MODEL_STORE.get("sequences", [])]
+        "sequences": [
+            sequence.get("name") for sequence in MODEL_STORE.get("sequences", [])
+        ],
     }
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("meta.json", json.dumps(project_meta))
-        archive.writestr("model.pkl", pickle.dumps(MODEL_STORE["wn"], protocol=pickle.HIGHEST_PROTOCOL))
+        archive.writestr(
+            "model.pkl",
+            pickle.dumps(MODEL_STORE["wn"], protocol=pickle.HIGHEST_PROTOCOL),
+        )
 
-        temp_inp_path = os.path.join(app.config["UPLOAD_FOLDER"], f"project_model_{uuid.uuid4().hex}.inp")
+        temp_inp_path = os.path.join(
+            app.config["UPLOAD_FOLDER"], f"project_model_{uuid.uuid4().hex}.inp"
+        )
         wntr.network.write_inpfile(MODEL_STORE["wn"], temp_inp_path)
         with open(temp_inp_path, "rb") as inp_file:
             archive.writestr("model.inp", inp_file.read())
@@ -1261,8 +1427,12 @@ def create_project_archive():
                 archive.writestr(f"{layer_name}.geojson", json.dumps(layer["geojson"]))
 
         for sequence in MODEL_STORE.get("sequences", []):
-            sequence_filename = sanitize_sequence_filename(sequence.get("name", "sequence"))
-            archive.writestr(f"sequences/{sequence_filename}", sequence_to_text(sequence))
+            sequence_filename = sanitize_sequence_filename(
+                sequence.get("name", "sequence")
+            )
+            archive.writestr(
+                f"sequences/{sequence_filename}", sequence_to_text(sequence)
+            )
 
     buffer.seek(0)
     return buffer
@@ -1283,7 +1453,9 @@ def restore_project_archive(project_file):
             wn = pickle.loads(archive.read("model.pkl"))
 
         if "model.inp" in archive.namelist():
-            inp_path = os.path.join(app.config["UPLOAD_FOLDER"], f"project_model_{uuid.uuid4().hex}.inp")
+            inp_path = os.path.join(
+                app.config["UPLOAD_FOLDER"], f"project_model_{uuid.uuid4().hex}.inp"
+            )
             with open(inp_path, "wb") as inp_file:
                 inp_file.write(archive.read("model.inp"))
             if wn is None:
@@ -1293,22 +1465,30 @@ def restore_project_archive(project_file):
             raise ValueError("Uploaded project archive does not contain a valid model.")
 
         if inp_path is None:
-            inp_path = os.path.join(app.config["UPLOAD_FOLDER"], f"project_model_{uuid.uuid4().hex}.inp")
+            inp_path = os.path.join(
+                app.config["UPLOAD_FOLDER"], f"project_model_{uuid.uuid4().hex}.inp"
+            )
             wntr.network.write_inpfile(wn, inp_path)
 
         MODEL_STORE["wn"] = wn
         MODEL_STORE["inp_path"] = inp_path
         MODEL_STORE["model_crs"] = model_crs
-        MODEL_STORE["pipe_geojson"] = water_network_pipes_to_geojson(wn=wn, model_crs=model_crs)
+        MODEL_STORE["pipe_geojson"] = water_network_pipes_to_geojson(
+            wn=wn, model_crs=model_crs
+        )
 
         for layer_name in ["hydrants", "valves"]:
             if f"{layer_name}.geojson" in archive.namelist():
-                geojson = json.loads(archive.read(f"{layer_name}.geojson").decode("utf-8"))
-                field_names = sorted({
-                    key
-                    for feature in geojson.get("features", [])
-                    for key in (feature.get("properties") or {}).keys()
-                })
+                geojson = json.loads(
+                    archive.read(f"{layer_name}.geojson").decode("utf-8")
+                )
+                field_names = sorted(
+                    {
+                        key
+                        for feature in geojson.get("features", [])
+                        for key in (feature.get("properties") or {}).keys()
+                    }
+                )
                 id_field = (
                     meta.get("uploaded_layers", {}).get(layer_name, {}).get("id_field")
                 )
@@ -1320,16 +1500,20 @@ def restore_project_archive(project_file):
                     "geojson": geojson,
                     "shape_name": f"{layer_name}.geojson",
                     "fields": field_names,
-                    "id_field": id_field
+                    "id_field": id_field,
                 }
             else:
                 MODEL_STORE["uploaded_layers"][layer_name] = None
 
         sequences = []
         for member_name in archive.namelist():
-            if member_name.lower().startswith("sequences/") and member_name.lower().endswith(".txt"):
+            if member_name.lower().startswith(
+                "sequences/"
+            ) and member_name.lower().endswith(".txt"):
                 text = archive.read(member_name).decode("utf-8")
-                sequences.append(parse_sequence_text(text, os.path.basename(member_name)))
+                sequences.append(
+                    parse_sequence_text(text, os.path.basename(member_name))
+                )
 
         MODEL_STORE["sequences"] = sequences
 
@@ -1338,7 +1522,7 @@ def restore_project_archive(project_file):
             "pipe_geojson": MODEL_STORE["pipe_geojson"],
             "hydrants": MODEL_STORE["uploaded_layers"]["hydrants"],
             "valves": MODEL_STORE["uploaded_layers"]["valves"],
-            "sequences": sequences
+            "sequences": sequences,
         }
 
 
@@ -1348,7 +1532,7 @@ def send_project_archive():
         archive_buffer,
         mimetype="application/zip",
         as_attachment=True,
-        download_name="flushing_journal_project.zip"
+        download_name="flushing_journal_project.zip",
     )
 
 
@@ -1359,7 +1543,7 @@ def get_uploaded_layer_response(layer_name, layer):
     return {
         "geojson": layer["geojson"],
         "fields": layer["fields"],
-        "selected_id_field": layer.get("id_field")
+        "selected_id_field": layer.get("id_field"),
     }
 
 
@@ -1368,9 +1552,11 @@ def make_project_response():
         "success": True,
         "model_crs": MODEL_STORE["model_crs"],
         "pipe_geojson": MODEL_STORE["pipe_geojson"],
-        "hydrants": get_uploaded_layer_response(MODEL_STORE["uploaded_layers"]["hydrants"]),
+        "hydrants": get_uploaded_layer_response(
+            MODEL_STORE["uploaded_layers"]["hydrants"]
+        ),
         "valves": get_uploaded_layer_response(MODEL_STORE["uploaded_layers"]["valves"]),
-        "sequences": MODEL_STORE.get("sequences", [])
+        "sequences": MODEL_STORE.get("sequences", []),
     }
 
 
@@ -1399,16 +1585,15 @@ def get_project_upload_filename():
 def maybe_write_project_inp(wn, inp_path):
     if inp_path and os.path.exists(inp_path):
         return inp_path
-    new_path = os.path.join(app.config["UPLOAD_FOLDER"], f"project_model_{uuid.uuid4().hex}.inp")
+    new_path = os.path.join(
+        app.config["UPLOAD_FOLDER"], f"project_model_{uuid.uuid4().hex}.inp"
+    )
     wntr.network.write_inpfile(wn, new_path)
     return new_path
 
 
 def get_project_error_response(exc):
-    return jsonify({
-        "success": False,
-        "message": str(exc)
-    }), 400
+    return jsonify({"success": False, "message": str(exc)}), 400
 
 
 def restore_project_from_file(project_zip):
@@ -1422,7 +1607,7 @@ def get_project_layer_data(layer_name):
     return {
         "geojson": layer["geojson"],
         "fields": layer["fields"],
-        "selected_id_field": layer.get("id_field")
+        "selected_id_field": layer.get("id_field"),
     }
 
 
@@ -1449,11 +1634,7 @@ def water_network_pipes_to_geojson(wn, model_crs):
     if not model_crs_text.upper().startswith("EPSG:"):
         model_crs_text = f"EPSG:{model_crs_text}"
 
-    transformer = Transformer.from_crs(
-        model_crs_text,
-        "EPSG:4326",
-        always_xy=True
-    )
+    transformer = Transformer.from_crs(model_crs_text, "EPSG:4326", always_xy=True)
 
     features = []
 
@@ -1496,20 +1677,14 @@ def water_network_pipes_to_geojson(wn, model_crs):
                 "diameter_meters": diameter_meters,
                 "diameter": diameter_inches,
                 "roughness": safe_float(getattr(pipe, "roughness", None)),
-                "status": str(getattr(pipe, "status", ""))
+                "status": str(getattr(pipe, "status", "")),
             },
-            "geometry": {
-                "type": "LineString",
-                "coordinates": transformed_coords
-            }
+            "geometry": {"type": "LineString", "coordinates": transformed_coords},
         }
 
         features.append(feature)
 
-    return make_json_serializable({
-        "type": "FeatureCollection",
-        "features": features
-    })
+    return make_json_serializable({"type": "FeatureCollection", "features": features})
 
 
 def safe_float(value):
