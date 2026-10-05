@@ -1,0 +1,623 @@
+  Page 1                                    Sun Oct  4 11:52:41 2026
+
+  ******************************************************************
+  *                           E P A N E T                          *
+  *                   Hydraulic and Water Quality                  *
+  *                   Analysis for Pipe Networks                   *
+  *                         Version 2.2                            *
+  ******************************************************************
+  
+  Analysis begun Sun Oct  4 11:52:41 2026
+
+   
+  Hydraulic Status:
+  -----------------------------------------------------------------------
+     0:00:00: Pipe P361 changed by Tank T4_WESTWOOD control
+     0:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 1.149946
+              PRV PRV_400N-Z3 switched from active to open
+              PRV PRV_Z3-Z2_850N1800E switched from active to open
+              Trial  2: relative flow change = 0.310088
+              PRV PRV_Z2-Z1_1600N switched from active to closed
+              PRV PRV_Z2-Z1_400N switched from active to closed
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from active to closed
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from active to closed
+              PRV PRV_Z3-Z2_850N1800E switched from open to active
+              PRV PRV_Z3-Z2_BENCH switched from active to closed
+              Pump PMP_CROWD switched from open to closed
+              FCV CONTROL_MAPLEBENCH switched from active to open
+              Trial  3: relative flow change = 0.791575
+              PRV PRV_Z3-Z2_850N1800E switched from active to open
+              Trial  4: relative flow change = 0.448249
+              PRV PRV_Z2-Z1_1600S switched from active to closed
+              PRV PRV_Z2-Z1_400S switched from active to closed
+              Pump PMP_CROWD switched from closed to open
+              Trial  5: relative flow change = 0.458226
+              PRV PRV_Z3-Z2_1600S switched from active to closed
+              Trial  6: relative flow change = 0.210212
+              PRV PRV_Z2-Z1_VILLAGE switched from active to closed
+              Trial  7: relative flow change = 0.212193
+              PRV PRV_MAPLE-Z2_LOWERTANK switched from active to closed
+              Trial  8: relative flow change = 0.024482
+              Trial  9: relative flow change = 0.002571
+              Trial 10: relative flow change = 0.000207
+                        maximum  flow change = 11.5628 for Link P2859
+                        maximum  head error  = 0.0011 for Link P2859
+
+     0:00:00: Balanced after 10 trials
+     0:00:00: Reservoir RES_SEALWELL is closed
+     0:00:00: Reservoir RES_CARNESECCAWELL is emptying
+     0:00:00: Reservoir RES_WESTWOODWELL is emptying
+     0:00:00: Reservoir RES_CROWD is emptying
+     0:00:00: Tank T3_LOWERTANK is filling at 10.20 ft
+     0:00:00: Tank T1_MAPLE1 is emptying at 19.00 ft
+     0:00:00: Tank T2_MAPLE2 is emptying at 19.00 ft
+     0:00:00: Tank T4_WESTWOOD is closed at 13.00 ft
+     0:00:00: Tank T5_CROWD is filling at 17.00 ft
+     0:00:00: Pipe P361 closed
+     0:00:00: FCV CONTROL_MAPLEBENCH open but cannot deliver flow
+     0:00:00: PRV PRV_400N-Z3 open
+     0:00:00: PRV PRV_MAPLE-Z2_LOWERTANK closed
+     0:00:00: PRV PRV_Z2-Z1_1600N closed
+     0:00:00: PRV PRV_Z2-Z1_1600S closed
+     0:00:00: PRV PRV_Z2-Z1_400N closed
+     0:00:00: PRV PRV_Z2-Z1_400S closed
+     0:00:00: PRV PRV_Z2-Z1_LOWERTWINHOLLOW closed
+     0:00:00: PRV PRV_Z2-Z1_SOUTHMAIN closed
+     0:00:00: PRV PRV_Z2-Z1_VILLAGE closed
+     0:00:00: PRV PRV_Z3-Z2_1600S closed
+     0:00:00: PRV PRV_Z3-Z2_850N1800E open
+     0:00:00: PRV PRV_Z3-Z2_BENCH closed
+   
+     0:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.004519
+              Trial  2: relative flow change = 0.000084
+                        maximum  flow change = 3.7421 for Link P2863
+                        maximum  head error  = 0.0001 for Link P2859
+
+     0:15:00: Balanced after 2 trials
+   
+     0:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.004441
+              Trial  2: relative flow change = 0.000139
+                        maximum  flow change = 8.2943 for Link P1125
+                        maximum  head error  = 0.0000 for Link P1125
+
+     0:30:00: Balanced after 2 trials
+   
+     0:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.004867
+              Trial  2: relative flow change = 0.000075
+                        maximum  flow change = 2.5050 for Link P1125
+                        maximum  head error  = 0.0000 for Link P1125
+
+     0:45:00: Balanced after 2 trials
+   
+     0:57:27: Pump PMP_WESTWOOD changed by Tank T3_LOWERTANK control
+     0:57:27: Balancing the network:
+
+              Trial  1: relative flow change = 0.592131
+              PRV PRV_Z2-Z1_1600N switched from closed to active
+              PRV PRV_Z2-Z1_1600S switched from closed to active
+              PRV PRV_Z2-Z1_400N switched from closed to active
+              PRV PRV_Z2-Z1_400S switched from closed to active
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from closed to active
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from closed to active
+              PRV PRV_Z2-Z1_VILLAGE switched from closed to active
+              Trial  2: relative flow change = 0.928735
+              Trial  3: relative flow change = 0.806797
+              PRV PRV_MAPLE-Z2_LOWERTANK switched from closed to active
+              PRV PRV_Z2-Z1_1600N switched from active to closed
+              PRV PRV_Z2-Z1_1600S switched from active to closed
+              PRV PRV_Z2-Z1_400N switched from active to closed
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from active to closed
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from active to closed
+              PRV PRV_Z3-Z2_1600S switched from closed to active
+              PRV PRV_Z3-Z2_BENCH switched from closed to active
+              Trial  4: relative flow change = 0.939908
+              Trial  5: relative flow change = 0.706992
+              PRV PRV_Z2-Z1_400S switched from active to closed
+              PRV PRV_Z3-Z2_BENCH switched from active to closed
+              Trial  6: relative flow change = 0.499900
+              PRV PRV_Z3-Z2_1600S switched from active to closed
+              Trial  7: relative flow change = 0.222518
+              Trial  8: relative flow change = 0.101127
+              PRV PRV_MAPLE-Z2_LOWERTANK switched from active to closed
+              Trial  9: relative flow change = 0.026454
+              Trial 10: relative flow change = 0.003623
+              Trial 11: relative flow change = 0.000077
+                        maximum  flow change = 0.5237 for Link P623
+                        maximum  head error  = 0.0001 for Link P623
+
+     0:57:27: Balanced after 11 trials
+     0:57:27: Pump PMP_WESTWOOD changed from open to closed
+     0:57:27: PRV PRV_Z2-Z1_VILLAGE changed from closed to active
+   
+     1:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.031450
+              PRV PRV_MAPLE-Z2_LOWERTANK switched from closed to active
+              Trial  2: relative flow change = 0.005365
+              Trial  3: relative flow change = 0.007661
+              Trial  4: relative flow change = 0.000561
+                        maximum  flow change = 4.6794 for Link P3117
+                        maximum  head error  = 0.0001 for Link P1121
+
+     1:00:00: Balanced after 4 trials
+     1:00:00: PRV PRV_MAPLE-Z2_LOWERTANK changed from closed to active
+   
+     1:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.003953
+              Trial  2: relative flow change = 0.000150
+                        maximum  flow change = 4.4685 for Link P3105
+                        maximum  head error  = 0.0000 for Link P3105
+
+     1:15:00: Balanced after 2 trials
+   
+     1:27:27: Pump PMP_CARNESECCA changed by Tank T3_LOWERTANK control
+     1:27:27: Balancing the network:
+
+              Trial  1: relative flow change = 0.381909
+              PRV PRV_Z2-Z1_1600N switched from closed to active
+              PRV PRV_Z2-Z1_1600S switched from closed to active
+              PRV PRV_Z2-Z1_400S switched from closed to active
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from closed to active
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from closed to active
+              Trial  2: relative flow change = 0.132415
+              Trial  3: relative flow change = 0.100124
+              PRV PRV_Z2-Z1_1600N switched from active to closed
+              PRV PRV_Z2-Z1_400S switched from active to closed
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from active to closed
+              Trial  4: relative flow change = 0.097169
+              Trial  5: relative flow change = 0.034199
+              PRV PRV_Z2-Z1_1600S switched from active to closed
+              Trial  6: relative flow change = 0.023066
+              PRV PRV_MAPLE-Z2_LOWERTANK switched from active to closed
+              Trial  7: relative flow change = 0.005566
+              PRV PRV_MAPLE-Z2_LOWERTANK switched from closed to active
+              Trial  8: relative flow change = 0.003941
+              Trial  9: relative flow change = 0.000244
+                        maximum  flow change = 2.2807 for Link P119
+                        maximum  head error  = 0.0000 for Link P2223
+
+     1:27:27: Balanced after 9 trials
+     1:27:27: Reservoir RES_CARNESECCAWELL is closed
+     1:27:27: Tank T3_LOWERTANK is emptying at 13.50 ft
+     1:27:27: Pump PMP_CARNESECCA changed from open to closed
+     1:27:27: PRV PRV_Z2-Z1_SOUTHMAIN changed from closed to active
+   
+     1:42:27: Balancing the network:
+
+              Trial  1: relative flow change = 0.004294
+              Trial  2: relative flow change = 0.000716
+                        maximum  flow change = 9.4169 for Link P1805
+                        maximum  head error  = 0.0002 for Link P1805
+
+     1:42:27: Balanced after 2 trials
+   
+     1:57:27: Balancing the network:
+
+              Trial  1: relative flow change = 0.004106
+              Trial  2: relative flow change = 0.000703
+                        maximum  flow change = 9.2282 for Link P971
+                        maximum  head error  = 0.0001 for Link P1805
+
+     1:57:27: Balanced after 2 trials
+   
+     2:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.026026
+              PRV PRV_Z2-Z1_1600S switched from closed to active
+              Trial  2: relative flow change = 0.016684
+              Trial  3: relative flow change = 0.016552
+              Trial  4: relative flow change = 0.004724
+              Trial  5: relative flow change = 0.000402
+                        maximum  flow change = 3.6395 for Link P2223
+                        maximum  head error  = 0.0003 for Link P2223
+
+     2:00:00: Balanced after 5 trials
+     2:00:00: PRV PRV_Z2-Z1_1600S changed from closed to active
+   
+     2:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.004252
+              Trial  2: relative flow change = 0.001108
+              Trial  3: relative flow change = 0.000719
+                        maximum  flow change = 6.2436 for Link P835
+                        maximum  head error  = 0.0007 for Link P2223
+
+     2:15:00: Balanced after 3 trials
+   
+     2:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.004139
+              Trial  2: relative flow change = 0.001117
+              Trial  3: relative flow change = 0.000717
+                        maximum  flow change = 6.2268 for Link P835
+                        maximum  head error  = 0.0006 for Link P2223
+
+     2:30:00: Balanced after 3 trials
+   
+     2:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.004103
+              Trial  2: relative flow change = 0.001045
+              Trial  3: relative flow change = 0.000655
+                        maximum  flow change = 6.2257 for Link P835
+                        maximum  head error  = 0.0005 for Link P2223
+
+     2:45:00: Balanced after 3 trials
+   
+     3:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.025572
+              PRV PRV_Z2-Z1_400S switched from closed to active
+              Trial  2: relative flow change = 0.017452
+              PRV PRV_Z3-Z2_1600S switched from closed to active
+              Trial  3: relative flow change = 0.011401
+              Trial  4: relative flow change = 0.001367
+              Trial  5: relative flow change = 0.000051
+                        maximum  flow change = 0.8207 for Link P2123
+                        maximum  head error  = 0.0000 for Link P2223
+
+     3:00:00: Balanced after 5 trials
+     3:00:00: PRV PRV_Z2-Z1_400S changed from closed to active
+     3:00:00: PRV PRV_Z3-Z2_1600S changed from closed to active
+   
+     3:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.003779
+              Trial  2: relative flow change = 0.000813
+                        maximum  flow change = 8.2239 for Link P2125-1600S
+                        maximum  head error  = 0.0002 for Link P1633
+
+     3:15:00: Balanced after 2 trials
+   
+     3:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.004042
+              Trial  2: relative flow change = 0.000820
+                        maximum  flow change = 8.1657 for Link P2125-1600S
+                        maximum  head error  = 0.0002 for Link P2201
+
+     3:30:00: Balanced after 2 trials
+   
+     3:36:00: Pump PMP_BOOSTER1 changed by rule RULE_BOOSTER1_ON
+     3:36:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.152806
+              Trial  2: relative flow change = 0.080302
+              Trial  3: relative flow change = 0.011404
+              Trial  4: relative flow change = 0.001262
+              Trial  5: relative flow change = 0.000605
+                        maximum  flow change = 5.7061 for Link P2123
+                        maximum  head error  = 0.0001 for Link P2123
+
+     3:36:00: Balanced after 5 trials
+     3:36:00: Tank T1_MAPLE1 is filling at 18.00 ft
+     3:36:00: Pump PMP_BOOSTER1 changed from closed to open
+   
+     3:51:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.016156
+              Trial  2: relative flow change = 0.005734
+              Trial  3: relative flow change = 0.005134
+              Trial  4: relative flow change = 0.000524
+                        maximum  flow change = 5.2260 for Link PRV_Z3-Z2_1600S
+                        maximum  head error  = 0.0001 for Link P2123
+
+     3:51:00: Balanced after 4 trials
+     3:51:00: Tank T1_MAPLE1 is emptying at 18.08 ft
+     3:51:00: Tank T2_MAPLE2 is filling at 18.01 ft
+   
+     3:55:28: Pump PMP_WESTWOOD changed by Tank T3_LOWERTANK control
+     3:55:28: Balancing the network:
+
+              Trial  1: relative flow change = 0.618125
+              Trial  2: relative flow change = 0.725470
+              PRV PRV_Z2-Z1_1600N switched from closed to active
+              PRV PRV_Z2-Z1_1600S switched from active to closed
+              PRV PRV_Z2-Z1_400S switched from active to closed
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from closed to active
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from active to closed
+              Trial  3: relative flow change = 0.594573
+              PRV PRV_Z3-Z2_1600S switched from active to closed
+              Trial  4: relative flow change = 0.386285
+              PRV PRV_Z2-Z1_1600N switched from active to closed
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from active to closed
+              Trial  5: relative flow change = 0.294157
+              Trial  6: relative flow change = 0.127693
+              Trial  7: relative flow change = 0.054679
+              Trial  8: relative flow change = 0.016634
+              Trial  9: relative flow change = 0.000745
+                        maximum  flow change = 3.8730 for Link P3117
+                        maximum  head error  = 0.0001 for Link P1121
+
+     3:55:28: Balanced after 9 trials
+     3:55:28: Tank T1_MAPLE1 is filling at 18.07 ft
+     3:55:28: Pump PMP_WESTWOOD changed from closed to open
+     3:55:28: PRV PRV_Z2-Z1_1600S changed from active to closed
+     3:55:28: PRV PRV_Z2-Z1_400S changed from active to closed
+     3:55:28: PRV PRV_Z2-Z1_SOUTHMAIN changed from active to closed
+     3:55:28: PRV PRV_Z3-Z2_1600S changed from active to closed
+   
+     4:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.036050
+              Trial  2: relative flow change = 0.005925
+              Trial  3: relative flow change = 0.009970
+              Trial  4: relative flow change = 0.000768
+                        maximum  flow change = 5.1105 for Link P3519
+                        maximum  head error  = 0.0001 for Link P1121
+
+     4:00:00: Balanced after 4 trials
+   
+     4:11:32: Pump PMP_CARNESECCA changed by Tank T3_LOWERTANK control
+     4:11:32: Balancing the network:
+
+              Trial  1: relative flow change = 0.689666
+              Trial  2: relative flow change = 0.788638
+              PRV PRV_Z2-Z1_1600N switched from closed to active
+              PRV PRV_Z2-Z1_VILLAGE switched from active to closed
+              Trial  3: relative flow change = 0.464624
+              PRV PRV_Z2-Z1_1600S switched from closed to active
+              PRV PRV_Z2-Z1_400S switched from closed to active
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from closed to active
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from closed to active
+              PRV PRV_Z2-Z1_VILLAGE switched from closed to active
+              Trial  4: relative flow change = 0.448878
+              PRV PRV_Z2-Z1_1600N switched from active to closed
+              Trial  5: relative flow change = 0.370132
+              PRV PRV_Z2-Z1_1600S switched from active to closed
+              PRV PRV_Z2-Z1_400S switched from active to closed
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from active to closed
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from active to closed
+              Trial  6: relative flow change = 0.489446
+              Trial  7: relative flow change = 0.249752
+              Trial  8: relative flow change = 0.121079
+              Trial  9: relative flow change = 0.050322
+              Trial 10: relative flow change = 0.013047
+              Trial 11: relative flow change = 0.001251
+              Trial 12: relative flow change = 0.000003
+                        maximum  flow change = 0.0189 for Link P835
+                        maximum  head error  = 0.0000 for Link P989
+
+     4:11:32: Balanced after 12 trials
+     4:11:32: Reservoir RES_CARNESECCAWELL is emptying
+     4:11:32: Pump PMP_CARNESECCA changed from closed to open
+   
+     4:26:32: Balancing the network:
+
+              Trial  1: relative flow change = 0.002615
+              Trial  2: relative flow change = 0.000118
+                        maximum  flow change = 4.0203 for Link P3365
+                        maximum  head error  = 0.0000 for Link P3105
+
+     4:26:32: Balanced after 2 trials
+   
+     4:41:32: Balancing the network:
+
+              Trial  1: relative flow change = 0.002290
+              Trial  2: relative flow change = 0.000113
+                        maximum  flow change = 3.9384 for Link P3119
+                        maximum  head error  = 0.0000 for Link P3105
+
+     4:41:32: Balanced after 2 trials
+   
+     4:56:32: Balancing the network:
+
+              Trial  1: relative flow change = 0.002203
+              Trial  2: relative flow change = 0.000112
+                        maximum  flow change = 3.8592 for Link P3119
+                        maximum  head error  = 0.0000 for Link P3105
+
+     4:56:32: Balanced after 2 trials
+   
+     5:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.076949
+              Trial  2: relative flow change = 0.018585
+              Trial  3: relative flow change = 0.034602
+              Trial  4: relative flow change = 0.004635
+              Trial  5: relative flow change = 0.000092
+                        maximum  flow change = 0.5017 for Link P2141
+                        maximum  head error  = 0.0000 for Link P1121
+
+     5:00:00: Balanced after 5 trials
+   
+     5:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002694
+              Trial  2: relative flow change = 0.000127
+                        maximum  flow change = 4.6582 for Link PRV_Z2-Z1_VILLAGE
+                        maximum  head error  = 0.0000 for Link P3105
+
+     5:15:00: Balanced after 2 trials
+   
+     5:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002478
+              Trial  2: relative flow change = 0.000126
+                        maximum  flow change = 4.5585 for Link P3119
+                        maximum  head error  = 0.0000 for Link P3105
+
+     5:30:00: Balanced after 2 trials
+   
+     5:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002372
+              Trial  2: relative flow change = 0.000123
+                        maximum  flow change = 4.4621 for Link PRV_Z2-Z1_VILLAGE
+                        maximum  head error  = 0.0000 for Link P3105
+
+     5:45:00: Balanced after 2 trials
+   
+     6:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.066079
+              Trial  2: relative flow change = 0.014349
+              Trial  3: relative flow change = 0.024696
+              Trial  4: relative flow change = 0.003010
+              Trial  5: relative flow change = 0.000042
+                        maximum  flow change = 0.2709 for Link P3103
+                        maximum  head error  = 0.0000 for Link P1121
+
+     6:00:00: Balanced after 5 trials
+   
+     6:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002897
+              Trial  2: relative flow change = 0.000146
+                        maximum  flow change = 5.6585 for Link PRV_Z2-Z1_VILLAGE
+                        maximum  head error  = 0.0001 for Link P3105
+
+     6:15:00: Balanced after 2 trials
+   
+     6:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002807
+              Trial  2: relative flow change = 0.000145
+                        maximum  flow change = 5.5387 for Link P3119
+                        maximum  head error  = 0.0001 for Link P3105
+
+     6:30:00: Balanced after 2 trials
+   
+     6:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002700
+              Trial  2: relative flow change = 0.000142
+                        maximum  flow change = 5.4216 for Link P3119
+                        maximum  head error  = 0.0001 for Link P3105
+
+     6:45:00: Balanced after 2 trials
+   
+     7:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.115028
+              PRV PRV_Z2-Z1_1600S switched from closed to active
+              PRV PRV_Z2-Z1_400S switched from closed to active
+              Trial  2: relative flow change = 0.042799
+              Trial  3: relative flow change = 0.050867
+              PRV PRV_Z3-Z2_1600S switched from closed to active
+              Trial  4: relative flow change = 0.022818
+              Trial  5: relative flow change = 0.006552
+              Trial  6: relative flow change = 0.000490
+                        maximum  flow change = 4.4287 for Link PRV_Z3-Z2_EAGLECOURT
+                        maximum  head error  = 0.0005 for Link P2223
+
+     7:00:00: Balanced after 6 trials
+     7:00:00: PRV PRV_Z2-Z1_1600S changed from closed to active
+     7:00:00: PRV PRV_Z2-Z1_400S changed from closed to active
+     7:00:00: PRV PRV_Z3-Z2_1600S changed from closed to active
+   
+     7:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.004648
+              Trial  2: relative flow change = 0.002547
+              Trial  3: relative flow change = 0.002862
+              Trial  4: relative flow change = 0.000244
+                        maximum  flow change = 2.9787 for Link P861
+                        maximum  head error  = 0.0000 for Link P2123
+
+     7:15:00: Balanced after 4 trials
+   
+     7:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.005414
+              Trial  2: relative flow change = 0.001831
+              Trial  3: relative flow change = 0.002199
+              Trial  4: relative flow change = 0.000102
+                        maximum  flow change = 1.3421 for Link PRV_Z3-Z2_1600S
+                        maximum  head error  = 0.0000 for Link P2123
+
+     7:30:00: Balanced after 4 trials
+   
+     7:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.006274
+              Trial  2: relative flow change = 0.001939
+              Trial  3: relative flow change = 0.001911
+              Trial  4: relative flow change = 0.000066
+                        maximum  flow change = 0.8824 for Link P2123
+                        maximum  head error  = 0.0000 for Link P2123
+
+     7:45:00: Balanced after 4 trials
+     7:45:00: Tank T2_MAPLE2 is emptying at 18.96 ft
+   
+     8:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.046017
+              Trial  2: relative flow change = 0.018922
+              Trial  3: relative flow change = 0.024681
+              Trial  4: relative flow change = 0.003148
+              Trial  5: relative flow change = 0.000203
+                        maximum  flow change = 2.2480 for Link P2123
+                        maximum  head error  = 0.0000 for Link P2123
+
+     8:00:00: Balanced after 5 trials
+     8:00:00: Tank T1_MAPLE1 is emptying at 19.01 ft
+     8:00:00: Tank T2_MAPLE2 is filling at 18.95 ft
+   
+     8:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.007498
+              Trial  2: relative flow change = 0.008307
+              Trial  3: relative flow change = 0.004596
+              Trial  4: relative flow change = 0.001033
+              Trial  5: relative flow change = 0.000137
+                        maximum  flow change = 18.1625 for Link P1125
+                        maximum  head error  = 0.0001 for Link P1125
+
+     8:15:00: Balanced after 5 trials
+     8:15:00: Tank T1_MAPLE1 is filling at 18.95 ft
+     8:15:00: Tank T2_MAPLE2 is emptying at 19.02 ft
+   
+     8:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.007230
+              Trial  2: relative flow change = 0.010121
+              Trial  3: relative flow change = 0.005428
+              Trial  4: relative flow change = 0.001466
+              Trial  5: relative flow change = 0.000244
+                        maximum  flow change = 32.6009 for Link P1123
+                        maximum  head error  = 0.0002 for Link P1125
+
+     8:30:00: Balanced after 5 trials
+     8:30:00: Tank T1_MAPLE1 is emptying at 19.05 ft
+     8:30:00: Tank T2_MAPLE2 is filling at 18.96 ft
+   
+     8:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.007286
+              Trial  2: relative flow change = 0.010854
+              Trial  3: relative flow change = 0.005707
+              Trial  4: relative flow change = 0.001719
+              Trial  5: relative flow change = 0.000348
+                        maximum  flow change = 46.7694 for Link P1125
+                        maximum  head error  = 0.0004 for Link P1125
+
+     8:45:00: Balanced after 5 trials
+     8:45:00: Tank T1_MAPLE1 is filling at 18.97 ft
+     8:45:00: Tank T2_MAPLE2 is emptying at 19.05 ft
+   
+     9:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.047278
+              Trial  2: relative flow change = 0.026345
+              Trial  3: relative flow change = 0.023020
+              Trial  4: relative flow change = 0.003991
+              Trial  5: relative flow change = 0.000529
+                        maximum  flow change = 62.8682 for Link P1123
+                        maximum  head error  = 0.0007 for Link P1125
+
+     9:00:00: Balanced after 5 trials
+     9:00:00: Tank T1_MAPLE1 is emptying at 19.07 ft
+     9:00:00: Tank T2_MAPLE2 is filling at 18.98 ft
+   
+     9:12:00: Pump PMP_BOOSTER1 changed by rule RULE_BOOSTER1_OFF
+  Analysis ended Sun Oct  4 11:52:41 2026

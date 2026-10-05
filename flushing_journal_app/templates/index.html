@@ -20,99 +20,10 @@
                 </div>
             </div>
 
-            <div class="toolbar-section toolbar-section-project" data-toolbar="project">
-                <div class="toolbar-upload-block toolbar-layer-block">
-                    <button id="loadModelBtn" class="tool-button" type="button" aria-label="Load an EPANET model">
-                        <span class="tool-button-icon">📄</span>
-                        <span class="tool-button-text">Load Model</span>
-                        <span class="tool-button-subtext">.inp</span>
-                    </button>
-                    <div id="modelLoadStatus" class="toolbar-status"></div>
-                </div>
-
-                <div class="toolbar-upload-block toolbar-layer-block">
-                    <button class="tool-button" type="button" data-upload-layer="hydrants">
-                        <span class="tool-button-icon">●</span>
-                        <span class="tool-button-text">Load Hydrants</span>
-                        <span class="tool-button-subtext">Point shapefile</span>
-                    </button>
-                    <div class="toolbar-field-block" style="display:none;" id="hydrantsFieldSelector">
-                        <select id="hydrantsIdFieldSelect" class="toolbar-input"></select>
-                    </div>
-                    <div id="hydrantsUploadStatus" class="toolbar-upload-status"></div>
-                </div>
-
-                <div class="toolbar-upload-block toolbar-layer-block">
-                    <button class="tool-button" type="button" data-upload-layer="valves">
-                        <span class="tool-button-icon">◇</span>
-                        <span class="tool-button-text">Load Valves</span>
-                        <span class="tool-button-subtext">Point shapefile</span>
-                    </button>
-                    <div class="toolbar-field-block" style="display:none;" id="valvesFieldSelector">
-                        <select id="valvesIdFieldSelect" class="toolbar-input"></select>
-                    </div>
-                    <div id="valvesUploadStatus" class="toolbar-upload-status"></div>
-                </div>
-
-                <div class="toolbar-upload-block toolbar-layer-block">
-                    <button class="tool-button" type="button" data-upload-layer="sequences">
-                        <span class="tool-button-icon">◇</span>
-                        <span class="tool-button-text">Load Sequences</span>
-                        <span class="tool-button-subtext">.txt</span>
-                    </button>
-                    <div class="toolbar-field-block" style="display:none;" id="sequencesFieldSelector">
-                        <select id="sequencesIdFieldSelect" class="toolbar-input"></select>
-                    </div>
-                    <div id="sequencesUploadStatus" class="toolbar-upload-status"></div>
-                </div>
-
-                <div class="toolbar-spacer"></div>
-                <div class="toolbar-spacer"></div>
-
-                <div class="toolbar-upload-block toolbar-layer-block">
-                    <button id="downloadProjectBtn" class="tool-button" type="button">
-                        <span class="tool-button-icon">📥</span>
-                        <span class="tool-button-text">Export Project</span>
-                        <span class="tool-button-subtext">ZIP</span>
-                    </button>
-                    <button id="uploadProjectBtn" class="tool-button" type="button">
-                        <span class="tool-button-icon">📤</span>
-                        <span class="tool-button-text">Import Project</span>
-                        <span class="tool-button-subtext">ZIP</span>
-                    </button>
-                    <div id="projectLoadStatus" class="toolbar-upload-status"></div>
-                </div>
-                <div class="toolbar-spacer"></div>
-            </div>
-
-            <div class="toolbar-section toolbar-section-hydrants hidden" data-toolbar="hydrants">
-                <div class="toolbar-upload-block toolbar-layer-block">
-                    <button id="connectHydrantsBtn" class="tool-button" type="button" disabled>
-                        <span class="tool-button-icon">●</span>
-                        <span class="tool-button-text">Connect Hydrants</span>
-                        <span class="tool-button-subtext">Text</span>
-                    </button>
-                    <div id="hydrantsConnectStatus" class="toolbar-upload-status"></div>
-                </div>
-
-                <div class="toolbar-spacer"></div>
-            </div>
-
-            <div class="toolbar-section toolbar-section-valves hidden" data-toolbar="valves">
-                <div class="toolbar-upload-block toolbar-layer-block">
-                    <button id="snapValvesBtn" class="tool-button" type="button" disabled>
-                        <span class="tool-button-icon">📌</span>
-                        <span class="tool-button-text">Snap Valves</span>
-                        <span class="tool-button-subtext">Snap all valves to pipes</span>
-                    </button>
-                    <div id="valvesSnapStatus" class="toolbar-upload-status"></div>
-                </div>
-                <div class="toolbar-spacer"></div>
-            </div>
-
             <div class="toolbar-section toolbar-section-sequences hidden" data-toolbar="sequences">
                 <div id="sequenceLoaderStatus" class="toolbar-upload-status"></div>
                 <div class="sequence-toolbar">
+                    <button id="loadSequencesBtn" class="sequence-action-button" type="button">Load Sequence</button>
                     <button id="addSequenceBtn" class="sequence-action-button" type="button">+ Add Sequence</button>
                 </div>
                 <div class="sequence-content">
@@ -191,14 +102,151 @@
             <div id="map"></div>
             <div id="footer">
                 <div class="bottom-toolbar" aria-label="Workspace sections">
-                    <button type="button" class="sidebar-mode-button active" data-toolbar-target="project">Project</button>
-                    <button type="button" class="sidebar-mode-button" data-toolbar-target="hydrants">Hydrants</button>
-                    <button type="button" class="sidebar-mode-button" data-toolbar-target="valves">Valves</button>
-                    <button type="button" class="sidebar-mode-button" data-toolbar-target="sequences">Sequences</button>
+                    <button type="button" class="sidebar-mode-button active" data-toolbar-target="sequences">Sequences</button>
                     <button type="button" class="sidebar-mode-button" data-toolbar-target="options">Options</button>
+                    <div class="project-toolbar-actions">
+                        <button id="editProjectBtn" class="project-toolbar-button" type="button" aria-label="Edit project" title="Edit project">
+                            <span aria-hidden="true">✎</span>
+                        </button>
+                        <button id="downloadProjectBtn" class="project-toolbar-button project-toolbar-save" type="button" aria-label="Save project as zip" title="Save project as zip">
+                            <span aria-hidden="true">💾</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </main>
+    </div>
+
+    <div id="projectStartupModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="projectStartupTitle">
+        <div class="modal-card">
+            <h3 id="projectStartupTitle">Set up your project</h3>
+            <p class="modal-copy">Choose whether to restore an existing project or start a new one.</p>
+            <div class="startup-choice-grid">
+                <button type="button" class="startup-choice-button" data-project-choice="import">Load existing project</button>
+                <button type="button" class="startup-choice-button primary" data-project-choice="new">Start new project</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="projectImportModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="projectImportTitle">
+        <div class="modal-card">
+            <button id="closeProjectImportModal" class="modal-close" type="button" aria-label="Close">×</button>
+            <h3 id="projectImportTitle">Import project</h3>
+            <p class="modal-copy">Select a saved project ZIP file to restore your previous workspace.</p>
+            <div class="modal-actions single-action">
+                <button id="projectImportFileBtn" class="modal-button primary" type="button">Choose project ZIP</button>
+            </div>
+            <div id="projectImportStatus" class="modal-error" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <div id="modelImportModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modelImportTitle">
+        <div class="modal-card">
+            <button id="closeModelImportModal" class="modal-close" type="button" aria-label="Close">×</button>
+            <h3 id="modelImportTitle">Import model</h3>
+            <p class="modal-copy">Select a model .inp file.</p>
+            <div class="modal-actions single-action">
+                <button id="modelImportFileBtn" class="modal-button primary" type="button">Choose model file</button>
+            </div>
+            <div id="modelImportStatus" class="modal-error" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <div id="uploadHydrantsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="uploadHydrantsTitle">
+        <div class="modal-card">
+            <button id="closeUploadHydrantsModal" class="modal-close" type="button" aria-label="Close">×</button>
+            <h3 id="uploadHydrantsTitle">Upload hydrants</h3>
+            <p class="modal-copy">Upload the hydrant shapefile before connecting it to the model network.</p>
+            <div class="modal-progress-block">
+                <div class="modal-progress-label">Progress</div>
+                <div class="modal-progress-track">
+                    <div id="uploadHydrantsProgressBar" class="modal-progress-bar" style="width: 0%;"></div>
+                </div>
+                <div id="uploadHydrantsProgressText" class="modal-progress-text">Waiting to start…</div>
+            </div>
+            <div class="modal-actions single-action">
+                <button id="uploadHydrantsModalBtn" class="modal-button primary" type="button">Upload Hydrants</button>
+            </div>
+            <div id="uploadHydrantsStatus" class="modal-error" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <div id="uploadValvesModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="uploadValvesTitle">
+        <div class="modal-card">
+            <button id="closeUploadValvesModal" class="modal-close" type="button" aria-label="Close">×</button>
+            <h3 id="uploadValvesTitle">Upload valves</h3>
+            <p class="modal-copy">Upload the valve shapefile before snapping it to the model pipes.</p>
+            <div class="modal-progress-block">
+                <div class="modal-progress-label">Progress</div>
+                <div class="modal-progress-track">
+                    <div id="uploadValvesProgressBar" class="modal-progress-bar" style="width: 0%;"></div>
+                </div>
+                <div id="uploadValvesProgressText" class="modal-progress-text">Waiting to start…</div>
+            </div>
+            <div class="modal-actions single-action">
+                <button id="uploadValvesModalBtn" class="modal-button primary" type="button">Upload Valves</button>
+            </div>
+            <div id="uploadValvesStatus" class="modal-error" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <div id="hydrantConnectModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="hydrantConnectTitle">
+        <div class="modal-card">
+            <button id="closeHydrantConnectModal" class="modal-close" type="button" aria-label="Close">×</button>
+            <h3 id="hydrantConnectTitle">Connect hydrants</h3>
+            <p class="modal-copy">Connect the uploaded hydrants to the model network before continuing.</p>
+            <div class="modal-progress-block">
+                <div class="modal-progress-label">Progress</div>
+                <div class="modal-progress-track">
+                    <div id="hydrantConnectProgressBar" class="modal-progress-bar" style="width: 0%;"></div>
+                </div>
+                <div id="hydrantConnectProgressText" class="modal-progress-text">Waiting to start…</div>
+            </div>
+            <div class="modal-actions single-action">
+                <button id="connectHydrantsModalBtn" class="modal-button primary" type="button">Connect Hydrants</button>
+            </div>
+            <div id="hydrantConnectStatus" class="modal-error" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <div id="valveSnapModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="valveSnapTitle">
+        <div class="modal-card">
+            <button id="closeValveSnapModal" class="modal-close" type="button" aria-label="Close">×</button>
+            <h3 id="valveSnapTitle">Snap valves</h3>
+            <p class="modal-copy">Snap all valves to the closest pipes in the model network.</p>
+            <div class="modal-progress-block">
+                <div class="modal-progress-label">Progress</div>
+                <div class="modal-progress-track">
+                    <div id="valveSnapProgressBar" class="modal-progress-bar" style="width: 0%;"></div>
+                </div>
+                <div id="valveSnapProgressText" class="modal-progress-text">Waiting to start…</div>
+            </div>
+            <div class="modal-actions single-action">
+                <button id="snapValvesModalBtn" class="modal-button primary" type="button">Snap Valves</button>
+            </div>
+            <div id="valveSnapStatus" class="modal-error" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <div id="layerWizardModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="layerWizardTitle">
+        <div class="modal-card">
+            <button id="closeLayerWizardModal" class="modal-close" type="button" aria-label="Close">×</button>
+            <h3 id="layerWizardTitle">Project setup</h3>
+            <p id="layerWizardCopy" class="modal-copy">Choose the next dataset to add to the project.</p>
+            <div class="wizard-step-body">
+                <button id="layerWizardFileBtn" class="modal-button secondary" type="button">Choose file</button>
+                <div id="layerWizardSelectedFile" class="wizard-file-name"></div>
+                <div id="layerWizardFieldGroup" class="wizard-field-group hidden">
+                    <label class="modal-label" for="layerWizardFieldSelect">ID field</label>
+                    <select id="layerWizardFieldSelect" class="modal-input"></select>
+                </div>
+                <div id="layerWizardError" class="modal-error" aria-live="polite"></div>
+            </div>
+            <div class="modal-actions">
+                <button id="layerWizardCancel" class="modal-button secondary" type="button">Cancel</button>
+                <button id="layerWizardNext" class="modal-button primary" type="button">Continue</button>
+            </div>
+        </div>
     </div>
 
     <div id="epsgModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="epsgModalTitle">

@@ -1,0 +1,631 @@
+  Page 1                                    Sun Oct  4 21:44:51 2026
+
+  ******************************************************************
+  *                           E P A N E T                          *
+  *                   Hydraulic and Water Quality                  *
+  *                   Analysis for Pipe Networks                   *
+  *                         Version 2.2                            *
+  ******************************************************************
+  
+  Analysis begun Sun Oct  4 21:44:51 2026
+
+   
+  Hydraulic Status:
+  -----------------------------------------------------------------------
+     0:00:00: Pipe P361 changed by Tank T4_WESTWOOD control
+     0:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 1.238098
+              PRV PRV_400N-Z3 switched from active to open
+              PRV PRV_Z3-Z2_850N1800E switched from active to open
+              Trial  2: relative flow change = 0.327340
+              PRV PRV_400N-Z3 switched from open to active
+              PRV PRV_MAPLE-Z2_LOWERTANK switched from active to open
+              PRV PRV_Z2-Z1_1600N switched from active to closed
+              PRV PRV_Z2-Z1_1600S switched from active to closed
+              PRV PRV_Z2-Z1_400S switched from active to closed
+              PRV PRV_Z2-Z1_HARMONYNORTH switched from active to closed
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from active to closed
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from active to closed
+              PRV PRV_Z3-Z2_850N1800E switched from open to closed
+              PRV PRV_Z3-Z2_BENCH switched from active to closed
+              PRV PRV_Z3-Z2_EAGLECOURT switched from active to closed
+              FCV CONTROL_MAPLEBENCH switched from active to open
+              Trial  3: relative flow change = 0.729943
+              PRV PRV_400N-Z3 switched from active to open
+              PRV PRV_MAPLE-Z2_LOWERTANK switched from open to active
+              PRV PRV_Z2-Z1_HARMONYNORTH switched from closed to active
+              PRV PRV_Z2-Z1_HARMONYSOUTH switched from active to closed
+              Trial  4: relative flow change = 0.434787
+              PRV PRV_THEPRESERVEMAPLE switched from active to closed
+              PRV PRV_Z2-Z1_400N switched from active to closed
+              PRV PRV_Z3-Z2_1600S switched from active to closed
+              Trial  5: relative flow change = 0.350747
+              Trial  6: relative flow change = 0.128241
+              Trial  7: relative flow change = 0.058194
+              Trial  8: relative flow change = 0.011979
+              Trial  9: relative flow change = 0.000716
+                        maximum  flow change = 9.6944 for Link P835
+                        maximum  head error  = 0.0002 for Link P2027
+
+     0:00:00: Balanced after 9 trials
+     0:00:00: Reservoir RES_SEALWELL is emptying
+     0:00:00: Reservoir RES_CARNESECCAWELL is emptying
+     0:00:00: Reservoir RES_WESTWOODWELL is emptying
+     0:00:00: Reservoir RES_CROWD is emptying
+     0:00:00: Reservoir SPR_MAPLECANYON_SPRINGS is emptying
+     0:00:00: Tank T3_LOWERTANK is filling at 10.20 ft
+     0:00:00: Tank T1_MAPLE1 is emptying at 19.00 ft
+     0:00:00: Tank T2_MAPLE2 is emptying at 19.00 ft
+     0:00:00: Tank T4_WESTWOOD is closed at 15.00 ft
+     0:00:00: Tank T5_CROWD is filling at 17.00 ft
+     0:00:00: Pipe P361 closed
+     0:00:00: FCV CONTROL_MAPLEBENCH open but cannot deliver flow
+     0:00:00: PRV PRV_400N-Z3 open
+     0:00:00: PRV PRV_THEPRESERVEMAPLE closed
+     0:00:00: PRV PRV_Z2-Z1_1600N closed
+     0:00:00: PRV PRV_Z2-Z1_1600S closed
+     0:00:00: PRV PRV_Z2-Z1_400N closed
+     0:00:00: PRV PRV_Z2-Z1_400S closed
+     0:00:00: PRV PRV_Z2-Z1_HARMONYSOUTH closed
+     0:00:00: PRV PRV_Z2-Z1_LOWERTWINHOLLOW closed
+     0:00:00: PRV PRV_Z2-Z1_SOUTHMAIN closed
+     0:00:00: PRV PRV_Z3-Z2_1600S closed
+     0:00:00: PRV PRV_Z3-Z2_850N1800E closed
+     0:00:00: PRV PRV_Z3-Z2_BENCH closed
+     0:00:00: PRV PRV_Z3-Z2_EAGLECOURT closed
+   
+  WARNING: Negative pressures at 0:00:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 0:00:00 hrs.
+   
+     0:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.005091
+              Trial  2: relative flow change = 0.000264
+                        maximum  flow change = 9.9695 for Link P2891
+                        maximum  head error  = 0.0002 for Link P3581_a85161
+
+     0:15:00: Balanced after 2 trials
+   
+  WARNING: Negative pressures at 0:15:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 0:15:00 hrs.
+   
+     0:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.005085
+              Trial  2: relative flow change = 0.000252
+                        maximum  flow change = 9.9641 for Link P3119
+                        maximum  head error  = 0.0003 for Link P3581_a85161
+
+     0:30:00: Balanced after 2 trials
+   
+  WARNING: Negative pressures at 0:30:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 0:30:00 hrs.
+   
+     0:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.005105
+              Trial  2: relative flow change = 0.000265
+                        maximum  flow change = 10.0086 for Link PRV_Z2-Z1_VILLAGE
+                        maximum  head error  = 0.0001 for Link P3365
+
+     0:45:00: Balanced after 2 trials
+   
+  WARNING: Negative pressures at 0:45:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 0:45:00 hrs.
+   
+     0:50:02: Pump PMP_CARNESECCA changed by Tank T3_LOWERTANK control
+     0:50:02: Pump PMP_SEAL changed by Tank T3_LOWERTANK control
+     0:50:02: Pump PMP_WESTWOOD changed by Tank T3_LOWERTANK control
+     0:50:02: Balancing the network:
+
+              Trial  1: relative flow change = 0.809207
+              PRV PRV_Z2-Z1_1600N switched from closed to active
+              PRV PRV_Z2-Z1_400N switched from closed to active
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from closed to active
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from closed to active
+              Trial  2: relative flow change = 0.546752
+              Trial  3: relative flow change = 0.531965
+              PRV PRV_Z2-Z1_1600N switched from active to closed
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from active to closed
+              Trial  4: relative flow change = 0.565520
+              PRV PRV_THEPRESERVEMAPLE switched from closed to active
+              PRV PRV_Z3-Z2_1600S switched from closed to active
+              PRV PRV_Z3-Z2_BENCH switched from closed to active
+              PRV PRV_Z3-Z2_HIDDENNORTH switched from active to open
+              PRV PRV_Z3-Z2_VILLAGE switched from active to open
+              Trial  5: relative flow change = 0.476773
+              PRV PRV_Z3-Z2_HIDDENNORTH switched from open to active
+              PRV PRV_Z3-Z2_VILLAGE switched from open to active
+              Trial  6: relative flow change = 0.117711
+              PRV PRV_THEPRESERVEMAPLE switched from active to closed
+              PRV PRV_Z2-Z1_1600N switched from closed to active
+              PRV PRV_Z3-Z2_BENCH switched from active to closed
+              Trial  7: relative flow change = 0.076094
+              Trial  8: relative flow change = 0.041150
+              Trial  9: relative flow change = 0.004305
+              PRV PRV_Z3-Z2_1600S switched from active to closed
+              Trial 10: relative flow change = 0.001088
+              Trial 11: relative flow change = 0.000415
+                        maximum  flow change = 9.3212 for Link P119
+                        maximum  head error  = 0.0001 for Link P1127
+
+     0:50:02: Balanced after 11 trials
+     0:50:02: Reservoir RES_SEALWELL is closed
+     0:50:02: Reservoir RES_CARNESECCAWELL is closed
+     0:50:02: Tank T5_CROWD is emptying at 17.41 ft
+     0:50:02: Pump PMP_CARNESECCA changed from open to closed
+     0:50:02: Pump PMP_SEAL changed from open to closed
+     0:50:02: Pump PMP_WESTWOOD changed from open to closed
+     0:50:02: PRV PRV_Z2-Z1_1600N changed from closed to active
+     0:50:02: PRV PRV_Z2-Z1_400N changed from closed to active
+     0:50:02: PRV PRV_Z2-Z1_SOUTHMAIN changed from closed to active
+   
+  WARNING: Negative pressures at 0:50:02 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 0:50:02 hrs.
+   
+     1:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.017230
+              PRV PRV_Z3-Z2_1600S switched from closed to active
+              Trial  2: relative flow change = 0.011618
+              Trial  3: relative flow change = 0.004730
+              Trial  4: relative flow change = 0.000198
+                        maximum  flow change = 2.8569 for Link P1365
+                        maximum  head error  = 0.0000 for Link P2123_173ea7
+
+     1:00:00: Balanced after 4 trials
+     1:00:00: PRV PRV_Z3-Z2_1600S changed from closed to active
+   
+  WARNING: Negative pressures at 1:00:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 1:00:00 hrs.
+   
+     1:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.001918
+              Trial  2: relative flow change = 0.000935
+                        maximum  flow change = 12.3293 for Link P2281_8c6a9f
+                        maximum  head error  = 0.0006 for Link P107_46de57
+
+     1:15:00: Balanced after 2 trials
+   
+  WARNING: Negative pressures at 1:15:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 1:15:00 hrs.
+   
+     1:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.001840
+              Trial  2: relative flow change = 0.000926
+                        maximum  flow change = 12.2315 for Link P2351
+                        maximum  head error  = 0.0006 for Link P107_46de57
+
+     1:30:00: Balanced after 2 trials
+   
+  WARNING: Negative pressures at 1:30:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 1:30:00 hrs.
+   
+     1:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.001746
+              Trial  2: relative flow change = 0.000915
+                        maximum  flow change = 12.1414 for Link P2351
+                        maximum  head error  = 0.0006 for Link P107_46de57
+
+     1:45:00: Balanced after 2 trials
+   
+  WARNING: Negative pressures at 1:45:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 1:45:00 hrs.
+   
+     2:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.277134
+              Trial  2: relative flow change = 0.172045
+              PRV PRV_Z2-Z1_1600N switched from active to closed
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from active to closed
+              Trial  3: relative flow change = 0.238017
+              PRV PRV_Z3-Z2_1600S switched from active to closed
+              Trial  4: relative flow change = 0.081688
+              Trial  5: relative flow change = 0.041901
+              Trial  6: relative flow change = 0.001869
+              Trial  7: relative flow change = 0.000145
+                        maximum  flow change = 0.9051 for Link P3269_bb0364
+                        maximum  head error  = 0.0000 for Link P1861_4fd88a
+
+     2:00:00: Balanced after 7 trials
+     2:00:00: Tank T5_CROWD is filling at 17.21 ft
+     2:00:00: PRV PRV_Z2-Z1_1600N changed from active to closed
+     2:00:00: PRV PRV_Z2-Z1_SOUTHMAIN changed from active to closed
+     2:00:00: PRV PRV_Z3-Z2_1600S changed from active to closed
+   
+  WARNING: Negative pressures at 2:00:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 2:00:00 hrs.
+   
+     2:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.003192
+              Trial  2: relative flow change = 0.001074
+              Trial  3: relative flow change = 0.000991
+                        maximum  flow change = 15.9075 for Link P1539
+                        maximum  head error  = 0.0002 for Link P1127
+
+     2:15:00: Balanced after 3 trials
+   
+  WARNING: Negative pressures at 2:15:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 2:15:00 hrs.
+   
+     2:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002859
+              Trial  2: relative flow change = 0.001060
+              Trial  3: relative flow change = 0.000987
+                        maximum  flow change = 15.8567 for Link PRV_MAPLE-Z2_LOWERTANK
+                        maximum  head error  = 0.0002 for Link P1127
+
+     2:30:00: Balanced after 3 trials
+   
+  WARNING: Negative pressures at 2:30:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 2:30:00 hrs.
+   
+     2:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002734
+              Trial  2: relative flow change = 0.001054
+              Trial  3: relative flow change = 0.000983
+                        maximum  flow change = 15.8009 for Link P123
+                        maximum  head error  = 0.0002 for Link P1127
+
+     2:45:00: Balanced after 3 trials
+   
+  WARNING: Negative pressures at 2:45:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 2:45:00 hrs.
+   
+     3:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.029636
+              Trial  2: relative flow change = 0.012244
+              Trial  3: relative flow change = 0.009354
+              Trial  4: relative flow change = 0.000111
+                        maximum  flow change = 2.7698 for Link P1127
+                        maximum  head error  = 0.0000 for Link P1127
+
+     3:00:00: Balanced after 4 trials
+   
+  WARNING: Negative pressures at 3:00:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 3:00:00 hrs.
+   
+     3:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002645
+              Trial  2: relative flow change = 0.001000
+              Trial  3: relative flow change = 0.000959
+                        maximum  flow change = 15.2118 for Link P1367
+                        maximum  head error  = 0.0001 for Link P1127
+
+     3:15:00: Balanced after 3 trials
+   
+  WARNING: Negative pressures at 3:15:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 3:15:00 hrs.
+   
+     3:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002587
+              Trial  2: relative flow change = 0.001000
+                        maximum  flow change = 15.1293 for Link PRV_Z2-Z1_400N
+                        maximum  head error  = 0.0003 for Link P137
+
+     3:30:00: Balanced after 2 trials
+   
+  WARNING: Negative pressures at 3:30:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 3:30:00 hrs.
+   
+     3:45:00: Pump PMP_BOOSTER1 changed by rule RULE_BOOSTER1_ON
+     3:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.134481
+              Trial  2: relative flow change = 0.065226
+              Trial  3: relative flow change = 0.010362
+              Trial  4: relative flow change = 0.001143
+              Trial  5: relative flow change = 0.000393
+                        maximum  flow change = 10.3548 for Link PRV_MAPLE-Z2_LOWERTANK
+                        maximum  head error  = 0.0001 for Link P1127
+
+     3:45:00: Balanced after 5 trials
+     3:45:00: Tank T3_LOWERTANK is emptying at 14.81 ft
+     3:45:00: Tank T1_MAPLE1 is filling at 16.98 ft
+     3:45:00: Pump PMP_BOOSTER1 changed from closed to open
+   
+  WARNING: Negative pressures at 3:45:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 3:45:00 hrs.
+   
+     4:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.031008
+              Trial  2: relative flow change = 0.015206
+              Trial  3: relative flow change = 0.008118
+              Trial  4: relative flow change = 0.000452
+                        maximum  flow change = 18.5443 for Link P1125
+                        maximum  head error  = 0.0001 for Link P1125
+
+     4:00:00: Balanced after 4 trials
+     4:00:00: Tank T1_MAPLE1 is emptying at 17.03 ft
+     4:00:00: Tank T2_MAPLE2 is filling at 17.00 ft
+   
+  WARNING: Negative pressures at 4:00:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 4:00:00 hrs.
+   
+     4:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.006073
+              Trial  2: relative flow change = 0.002771
+              Trial  3: relative flow change = 0.001666
+              Trial  4: relative flow change = 0.000048
+                        maximum  flow change = 1.4849 for Link P1365
+                        maximum  head error  = 0.0000 for Link P1127
+
+     4:15:00: Balanced after 4 trials
+     4:15:00: Tank T2_MAPLE2 is emptying at 17.00 ft
+   
+  WARNING: Negative pressures at 4:15:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 4:15:00 hrs.
+   
+     4:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.004464
+              Trial  2: relative flow change = 0.002253
+              Trial  3: relative flow change = 0.001492
+              Trial  4: relative flow change = 0.000037
+                        maximum  flow change = 1.1157 for Link P119
+                        maximum  head error  = 0.0000 for Link P1127
+
+     4:30:00: Balanced after 4 trials
+   
+  WARNING: Negative pressures at 4:30:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 4:30:00 hrs.
+   
+     4:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.003857
+              Trial  2: relative flow change = 0.001999
+              Trial  3: relative flow change = 0.001355
+              Trial  4: relative flow change = 0.000029
+                        maximum  flow change = 0.8692 for Link P1365
+                        maximum  head error  = 0.0000 for Link P1127
+
+     4:45:00: Balanced after 4 trials
+   
+  WARNING: Negative pressures at 4:45:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 4:45:00 hrs.
+   
+     5:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.051079
+              PRV PRV_Z2-Z1_1600N switched from closed to active
+              Trial  2: relative flow change = 0.027049
+              PRV PRV_THEPRESERVEMAPLE switched from closed to active
+              PRV PRV_Z3-Z2_1600S switched from closed to active
+              Trial  3: relative flow change = 0.062507
+              Trial  4: relative flow change = 0.063785
+              PRV PRV_THEPRESERVEMAPLE switched from active to closed
+              Trial  5: relative flow change = 0.041095
+              Trial  6: relative flow change = 0.018642
+              Trial  7: relative flow change = 0.000621
+                        maximum  flow change = 6.1803 for Link CONTROL_MAPLEBENCH
+                        maximum  head error  = 0.0000 for Link P2027
+
+     5:00:00: Balanced after 7 trials
+     5:00:00: PRV PRV_Z2-Z1_1600N changed from closed to active
+     5:00:00: PRV PRV_Z3-Z2_1600S changed from closed to active
+   
+  WARNING: Negative pressures at 5:00:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 5:00:00 hrs.
+   
+     5:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.003813
+              Trial  2: relative flow change = 0.002419
+              Trial  3: relative flow change = 0.001189
+              Trial  4: relative flow change = 0.000030
+                        maximum  flow change = 0.7575 for Link P1365
+                        maximum  head error  = 0.0000 for Link P1127
+
+     5:15:00: Balanced after 4 trials
+   
+  WARNING: Negative pressures at 5:15:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 5:15:00 hrs.
+   
+     5:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.003355
+              Trial  2: relative flow change = 0.002225
+              Trial  3: relative flow change = 0.001113
+              Trial  4: relative flow change = 0.000026
+                        maximum  flow change = 0.6417 for Link P1367
+                        maximum  head error  = 0.0000 for Link P1127
+
+     5:30:00: Balanced after 4 trials
+   
+  WARNING: Negative pressures at 5:30:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 5:30:00 hrs.
+   
+     5:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.003174
+              Trial  2: relative flow change = 0.002075
+              Trial  3: relative flow change = 0.001053
+              Trial  4: relative flow change = 0.000023
+                        maximum  flow change = 0.5672 for Link PRV_MAPLE-Z2_LOWERTANK
+                        maximum  head error  = 0.0000 for Link P1127
+
+     5:45:00: Balanced after 4 trials
+   
+  WARNING: Negative pressures at 5:45:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 5:45:00 hrs.
+   
+     6:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.048194
+              Trial  2: relative flow change = 0.031404
+              PRV PRV_Z3-Z2_850N1800E switched from closed to open
+              Trial  3: relative flow change = 0.026851
+              Trial  4: relative flow change = 0.005132
+              Trial  5: relative flow change = 0.000853
+                        maximum  flow change = 16.9058 for Link P3125
+                        maximum  head error  = 0.0002 for Link P2123_173ea7
+
+     6:00:00: Balanced after 5 trials
+     6:00:00: PRV PRV_Z3-Z2_850N1800E changed from closed to open
+   
+  WARNING: Negative pressures at 6:00:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 6:00:00 hrs.
+   
+     6:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.003111
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from closed to active
+              Trial  2: relative flow change = 0.002144
+              Trial  3: relative flow change = 0.001123
+              Trial  4: relative flow change = 0.000097
+                        maximum  flow change = 1.3689 for Link P975_a40b02
+                        maximum  head error  = 0.0000 for Link P1121
+
+     6:15:00: Balanced after 4 trials
+     6:15:00: PRV PRV_Z2-Z1_SOUTHMAIN changed from closed to active
+   
+  WARNING: Negative pressures at 6:15:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 6:15:00 hrs.
+   
+     6:30:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002986
+              Trial  2: relative flow change = 0.001777
+              Trial  3: relative flow change = 0.000807
+                        maximum  flow change = 14.3158 for Link P1127
+                        maximum  head error  = 0.0003 for Link P1127
+
+     6:30:00: Balanced after 3 trials
+   
+  WARNING: Negative pressures at 6:30:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 6:30:00 hrs.
+   
+     6:45:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002851
+              Trial  2: relative flow change = 0.001681
+              Trial  3: relative flow change = 0.000752
+                        maximum  flow change = 13.5343 for Link P1127
+                        maximum  head error  = 0.0002 for Link P1127
+
+     6:45:00: Balanced after 3 trials
+   
+  WARNING: Negative pressures at 6:45:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 6:45:00 hrs.
+   
+     7:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.067719
+              Trial  2: relative flow change = 0.053299
+              Trial  3: relative flow change = 0.021272
+              Trial  4: relative flow change = 0.001573
+              Trial  5: relative flow change = 0.000051
+                        maximum  flow change = 0.7231 for Link P1365
+                        maximum  head error  = 0.0000 for Link P1121
+
+     7:00:00: Balanced after 5 trials
+     7:00:00: Tank T5_CROWD is emptying at 17.99 ft
+   
+  WARNING: Negative pressures at 7:00:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 7:00:00 hrs.
+   
+     7:15:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.002533
+              Trial  2: relative flow change = 0.001421
+              Trial  3: relative flow change = 0.000611
+                        maximum  flow change = 14.7162 for Link P1367
+                        maximum  head error  = 0.0002 for Link P1127
+
+     7:15:00: Balanced after 3 trials
+   
+  WARNING: Negative pressures at 7:15:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 7:15:00 hrs.
+   
+     7:15:53: Pump PMP_CARNESECCA changed by Tank T3_LOWERTANK control
+     7:15:53: Pump PMP_SEAL changed by Tank T3_LOWERTANK control
+     7:15:53: Balancing the network:
+
+              Trial  1: relative flow change = 0.264536
+              Trial  2: relative flow change = 0.312895
+              PRV PRV_400N-Z3 switched from open to closed
+              PRV PRV_Z2-Z1_1600N switched from active to closed
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from active to closed
+              PRV PRV_Z3-Z2_850N1800E switched from open to closed
+              Trial  3: relative flow change = 0.286951
+              PRV PRV_400N-Z3 switched from closed to open
+              PRV PRV_MAPLE-Z3_LOWERTANKS switched from active to closed
+              Trial  4: relative flow change = 0.209785
+              PRV PRV_MAPLE-Z3_LOWERTANKS switched from closed to active
+              Trial  5: relative flow change = 0.097058
+              PRV PRV_Z3-Z2_1600S switched from active to closed
+              Trial  6: relative flow change = 0.028227
+              Trial  7: relative flow change = 0.004674
+              Trial  8: relative flow change = 0.000510
+                        maximum  flow change = 15.0980 for Link P1123
+                        maximum  head error  = 0.0000 for Link P1123
+
+     7:15:53: Balanced after 8 trials
+     7:15:53: Reservoir RES_SEALWELL is emptying
+     7:15:53: Reservoir RES_CARNESECCAWELL is emptying
+     7:15:53: Tank T1_MAPLE1 is filling at 16.07 ft
+     7:15:53: Tank T5_CROWD is filling at 17.97 ft
+     7:15:53: Pump PMP_CARNESECCA changed from closed to open
+     7:15:53: Pump PMP_SEAL changed from closed to open
+     7:15:53: PRV PRV_Z2-Z1_1600N changed from active to closed
+     7:15:53: PRV PRV_Z2-Z1_SOUTHMAIN changed from active to closed
+     7:15:53: PRV PRV_Z3-Z2_1600S changed from active to closed
+     7:15:53: PRV PRV_Z3-Z2_850N1800E changed from open to closed
+   
+  WARNING: Negative pressures at 7:15:53 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 7:15:53 hrs.
+   
+     7:30:53: Balancing the network:
+
+              Trial  1: relative flow change = 0.003104
+              Trial  2: relative flow change = 0.003282
+              Trial  3: relative flow change = 0.001149
+              Trial  4: relative flow change = 0.000166
+                        maximum  flow change = 38.7142 for Link P1125
+                        maximum  head error  = 0.0003 for Link P1125
+
+     7:30:53: Balanced after 4 trials
+     7:30:53: Tank T1_MAPLE1 is emptying at 16.16 ft
+     7:30:53: Tank T2_MAPLE2 is filling at 16.09 ft
+   
+  WARNING: Negative pressures at 7:30:53 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 7:30:53 hrs.
+   
+     7:45:53: Balancing the network:
+
+              Trial  1: relative flow change = 0.003717
+              Trial  2: relative flow change = 0.003411
+              Trial  3: relative flow change = 0.001218
+              Trial  4: relative flow change = 0.000202
+                        maximum  flow change = 47.2324 for Link P1123
+                        maximum  head error  = 0.0004 for Link P1125
+
+     7:45:53: Balanced after 4 trials
+     7:45:53: Tank T1_MAPLE1 is filling at 16.07 ft
+     7:45:53: Tank T2_MAPLE2 is emptying at 16.17 ft
+   
+  WARNING: Negative pressures at 7:45:53 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 7:45:53 hrs.
+   
+     8:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.040626
+              PRV PRV_Z2-Z1_SOUTHMAIN switched from closed to active
+              Trial  2: relative flow change = 0.031885
+              Trial  3: relative flow change = 0.017610
+              Trial  4: relative flow change = 0.005274
+              Trial  5: relative flow change = 0.000215
+                        maximum  flow change = 4.6492 for Link P1125
+                        maximum  head error  = 0.0000 for Link P1121

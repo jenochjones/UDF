@@ -14,7 +14,11 @@ import uuid
 import io
 import pickle
 import zipfile
+from operator import index as index_value
 from shapely.geometry import shape, Point, LineString
+from shapely.strtree import STRtree
+
+from model import run_water_network_model
 
 app = Flask(__name__)
 
@@ -30,13 +34,53 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 # or a server-side cache keyed by user/session ID.
 MODEL_STORE = {
     "wn": None,
+    "running_model": None,
     "inp_path": None,
+    "rpt_path": None,
+    "bin_path": None,
     "model_crs": None,
+    "model_time": 0,
     "pipe_geojson": None,
     "uploaded_layers": {"valves": None, "hydrants": None},
+    "element_mapping": {"valves": {}, "hydrants": {}},
     "sequences": [],
     "snapshots": {},
 }
+
+OPERATION_PROGRESS = {
+    "hydrants": {"percent": 0, "message": "Waiting to start…", "done": True},
+    "valves": {"percent": 0, "message": "Waiting to start…", "done": True},
+}
+
+
+def set_operation_progress(operation, percent, message, done=False, error=False):
+    OPERATION_PROGRESS[operation] = {
+        "percent": max(0, min(100, int(percent))),
+        "message": message,
+        "done": done,
+        "error": error,
+    }
+
+
+@app.route("/operation_progress/<operation>", methods=["GET"])
+def operation_progress(operation):
+    if operation not in OPERATION_PROGRESS:
+        return jsonify({"success": False, "message": "Unknown operation."}), 404
+    return jsonify(OPERATION_PROGRESS[operation])
+
+
+def set_model_paths(inp_path):
+    if not inp_path:
+        MODEL_STORE["inp_path"] = None
+        MODEL_STORE["rpt_path"] = None
+        MODEL_STORE["bin_path"] = None
+        return
+
+    MODEL_STORE["inp_path"] = inp_path
+    directory = os.path.dirname(inp_path) or os.getcwd()
+    file_root = os.path.splitext(os.path.basename(inp_path))[0]
+    MODEL_STORE["rpt_path"] = os.path.join(directory, f"{file_root}.rpt")
+    MODEL_STORE["bin_path"] = os.path.join(directory, f"{file_root}.bin")
 
 
 @app.route("/")
@@ -154,7 +198,7 @@ def upload_model():
         print(f"[DEBUG] Model CRS: {model_crs}")
 
         MODEL_STORE["wn"] = wn
-        MODEL_STORE["inp_path"] = inp_path
+        set_model_paths(inp_path)
         MODEL_STORE["model_crs"] = model_crs
         MODEL_STORE["pipe_geojson"] = pipe_geojson
         response = {
@@ -225,6 +269,111 @@ def upload_project():
     except Exception as exc:
         print(traceback.format_exc())
         return jsonify({"success": False, "message": str(exc)}), 500
+
+
+def _feature_reference_keys(feature):
+    keys = []
+
+    if not isinstance(feature, dict):
+        return keys
+
+    properties = feature.get("properties") or {}
+    for key in ("id", "ID", "name", "Name"):
+        value = properties.get(key)
+        if value is not None and str(value).strip() != "":
+            keys.append(str(value))
+
+    geometry = feature.get("geometry") or {}
+    coordinates = geometry.get("coordinates")
+    if isinstance(coordinates, (list, tuple)) and len(coordinates) >= 2:
+        try:
+            keys.append(f"{float(coordinates[0]):.6f},{float(coordinates[1]):.6f}")
+        except (TypeError, ValueError):
+            pass
+
+    return keys
+
+
+def _record_element_mapping(layer_type, feature, model_elements, id_field=None):
+    mapping = MODEL_STORE.setdefault("element_mapping", {}).setdefault(layer_type, {})
+    properties = feature.get("properties") or {}
+    gis_id = properties.get(id_field) if id_field else None
+    if gis_id is None or not str(gis_id).strip():
+        return
+
+    # Hydrants map to their generated EPANET junction; valves map to the
+    # EPANET link their GIS point was snapped to.
+    element_name = (
+        model_elements.get("node") if layer_type == "hydrants"
+        else model_elements.get("pipe")
+    )
+    if element_name is not None and str(element_name).strip():
+        mapping[str(gis_id).strip()] = str(element_name).strip()
+    feature.setdefault("properties", {})["model_elements"] = model_elements
+
+
+def _restore_element_mapping_from_layers():
+    MODEL_STORE["element_mapping"] = {"valves": {}, "hydrants": {}}
+    for layer_type in ("hydrants", "valves"):
+        layer = MODEL_STORE["uploaded_layers"].get(layer_type)
+        if not layer or not layer.get("geojson"):
+            continue
+        for feature in layer["geojson"].get("features", []):
+            model_elements = (feature.get("properties") or {}).get("model_elements")
+            if not model_elements:
+                properties = feature.get("properties") or {}
+                if layer_type == "hydrants" and properties.get("hydrant_pipe_name"):
+                    model_elements = {
+                        "node": properties.get("hydrant_junction_name"),
+                        "pipe": properties.get("hydrant_pipe_name"),
+                        "connection_node": properties.get("connection_node_name"),
+                    }
+                elif layer_type == "valves" and properties.get("model_pipe_name"):
+                    model_elements = {
+                        "pipe": properties.get("model_pipe_name"),
+                        "nodes": properties.get("model_pipe_nodes", []),
+                    }
+            if model_elements:
+                _record_element_mapping(
+                    layer_type, feature, model_elements, layer.get("id_field")
+                )
+
+
+def _refresh_mapping_aliases(layer_type):
+    layer = MODEL_STORE["uploaded_layers"].get(layer_type)
+    if not layer or not layer.get("geojson"):
+        return
+    MODEL_STORE.setdefault("element_mapping", {})[layer_type] = {}
+    for feature in layer["geojson"].get("features", []):
+        model_elements = (feature.get("properties") or {}).get("model_elements")
+        if model_elements:
+            _record_element_mapping(
+                layer_type, feature, model_elements, layer.get("id_field")
+            )
+
+
+def _filter_modified_features(layer_type, modified_features):
+    layer = MODEL_STORE["uploaded_layers"].get(layer_type)
+    if not layer or not layer.get("geojson"):
+        return []
+
+    features = layer["geojson"].get("features", [])
+    if not modified_features:
+        return features
+
+    target_keys = set()
+    for feature in modified_features:
+        target_keys.update(_feature_reference_keys(feature))
+
+    if not target_keys:
+        return features
+
+    filtered = []
+    for feature in features:
+        feature_keys = _feature_reference_keys(feature)
+        if any(key in target_keys for key in feature_keys):
+            filtered.append(feature)
+    return filtered
 
 
 @app.route("/connect_hydrants", methods=["POST"])
@@ -305,7 +454,11 @@ def connect_hydrants():
         return geometries
 
     # Connect each uploaded hydrant to the nearest pipe in the loaded WNTR model.
+    set_operation_progress("hydrants", 1, "Preparing hydrant connection…")
     try:
+        data = request.get_json(silent=True) or {}
+        modified_hydrants = data.get("hydrants") or []
+
         if MODEL_STORE["wn"] is None:
             return (
                 jsonify({"success": False, "message": "No model has been loaded yet."}),
@@ -337,7 +490,10 @@ def connect_hydrants():
 
         wn = MODEL_STORE["wn"]
         model_crs = MODEL_STORE["model_crs"]
-        hydrant_features = hydrants_layer["geojson"]["features"]
+        if modified_hydrants:
+            hydrant_features = _filter_modified_features("hydrants", modified_hydrants)
+        else:
+            hydrant_features = hydrants_layer["geojson"]["features"]
         pipe_base_names = {}
 
         def normalize_crs(crs_str):
@@ -350,6 +506,7 @@ def connect_hydrants():
             return crs_text
 
         model_crs = normalize_crs(model_crs)
+        set_operation_progress("hydrants", 4, "Building model pipe geometries…")
         pipe_geometries = build_pipe_geometries(wn)
 
         if not pipe_geometries:
@@ -367,11 +524,39 @@ def connect_hydrants():
             "EPSG:4326", model_crs, always_xy=True
         )
 
+        set_operation_progress("hydrants", 8, "Preparing nearest-pipe search…")
+
         hydrant_id_field = hydrants_layer.get("id_field")
         connected_count = 0
         skipped_count = 0
+        node_names = set(wn.node_name_list)
+        link_names = set(wn.link_name_list)
+        pipe_tree = STRtree([item["geometry"] for item in pipe_geometries])
 
-        for hydrant_feature in hydrant_features:
+        def nearest_pipe_for(point):
+            """Return the indexed pipe nearest to a point (Shapely 1.x/2.x)."""
+            result = pipe_tree.nearest(point)
+            try:
+                return pipe_geometries[index_value(result)]
+            except TypeError:
+                pass
+            # Shapely 1.x returns the geometry itself; identity mapping avoids
+            # repeatedly comparing every geometry in Python.
+            return pipe_by_geometry_id[id(result)]
+
+        pipe_by_geometry_id = {
+            id(item["geometry"]): item for item in pipe_geometries
+        }
+
+        total_hydrants = len(hydrant_features)
+        for hydrant_index, hydrant_feature in enumerate(hydrant_features):
+            completed_fraction = hydrant_index / max(1, total_hydrants)
+            progress_percent = 8 + int(completed_fraction * 74)
+            set_operation_progress(
+                "hydrants",
+                progress_percent,
+                f"Connecting hydrant {hydrant_index + 1} of {total_hydrants}…",
+            )
             geometry = hydrant_feature.get("geometry")
             if not geometry:
                 skipped_count += 1
@@ -406,12 +591,27 @@ def connect_hydrants():
             if not hydrant_junction_name:
                 hydrant_junction_name = f"HYDRANT_{uuid.uuid4().hex[:8]}"
 
+            previous_pipe_name = hydrant_feature.get("properties", {}).get("hydrant_pipe_name")
+            previous_junction_name = hydrant_feature.get("properties", {}).get("hydrant_junction_name")
+
+            if previous_pipe_name and previous_pipe_name in link_names:
+                try:
+                    wn.remove_link(previous_pipe_name)
+                    link_names.discard(previous_pipe_name)
+                except Exception:
+                    pass
+
+            if previous_junction_name and previous_junction_name in node_names:
+                try:
+                    if not wn.get_links_for_node(previous_junction_name):
+                        wn.remove_node(previous_junction_name)
+                        node_names.discard(previous_junction_name)
+                except Exception:
+                    pass
+
             hydrant_junction_name = make_unique_node_name(hydrant_junction_name, wn)
 
-            nearest_pipe = min(
-                pipe_geometries,
-                key=lambda item: hydrant_point.distance(item["geometry"]),
-            )
+            nearest_pipe = nearest_pipe_for(hydrant_point)
 
             pipe_name = nearest_pipe["name"]
             pipe_line = nearest_pipe["geometry"]
@@ -476,6 +676,8 @@ def connect_hydrants():
 
                 pipe_base_names[pipe_name] = base_pipe_name
                 pipe_base_names[new_pipe_name] = base_pipe_name
+                node_names.add(connection_node_name)
+                link_names.add(new_pipe_name)
 
                 connection_node = wn.get_node(connection_node_name)
                 connection_node.coordinates = (x_split, y_split)
@@ -487,18 +689,28 @@ def connect_hydrants():
                 )
                 connection_node.elevation = connection_elevation
 
+                set_operation_progress(
+                    "hydrants",
+                    progress_percent,
+                    f"Updating pipe network after hydrant {hydrant_index + 1}…",
+                )
                 pipe_geometries = build_pipe_geometries(wn)
+                pipe_tree = STRtree([item["geometry"] for item in pipe_geometries])
+                pipe_by_geometry_id = {
+                    id(item["geometry"]): item for item in pipe_geometries
+                }
                 for refreshed_pipe_name, _ in wn.pipes():
                     if refreshed_pipe_name not in pipe_base_names:
                         pipe_base_names[refreshed_pipe_name] = refreshed_pipe_name
 
-            if hydrant_junction_name not in wn.node_name_list:
+            if hydrant_junction_name not in node_names:
                 wn.add_junction(
                     hydrant_junction_name,
                     base_demand=0.0,
                     elevation=connection_elevation,
                     coordinates=(x_hyd, y_hyd),
                 )
+                node_names.add(hydrant_junction_name)
 
             hydrant_pipe_base_name = f"{hydrant_junction_name}_pipe"
             hydrant_pipe_name = make_unique_link_name(
@@ -519,17 +731,39 @@ def connect_hydrants():
                 minor_loss=0.0,
                 initial_status="OPEN",
             )
+            link_names.add(hydrant_pipe_name)
+
+            hydrant_feature.setdefault("properties", {})
+            hydrant_feature["properties"]["hydrant_junction_name"] = hydrant_junction_name
+            hydrant_feature["properties"]["connection_node_name"] = connection_node_name
+            hydrant_feature["properties"]["hydrant_pipe_name"] = hydrant_pipe_name
+            _record_element_mapping(
+                "hydrants",
+                hydrant_feature,
+                {
+                    "node": hydrant_junction_name,
+                    "pipe": hydrant_pipe_name,
+                    "network_pipe": pipe_name,
+                    "connection_node": connection_node_name,
+                },
+                hydrant_id_field,
+            )
 
             connected_count += 1
 
+        set_operation_progress("hydrants", 84, "Updating model pipe map…")
         MODEL_STORE["pipe_geojson"] = water_network_pipes_to_geojson(
             wn=wn, model_crs=model_crs
         )
+        MODEL_STORE["uploaded_layers"]["hydrants"]["geojson"]["features"] = hydrants_layer["geojson"]["features"]
 
         MODEL_STORE["wn"] = wn
 
         if MODEL_STORE["inp_path"]:
+            set_operation_progress("hydrants", 94, "Saving updated water network…")
             wntr.network.write_inpfile(wn, MODEL_STORE["inp_path"])
+
+        set_operation_progress("hydrants", 100, "Hydrants connected successfully.", done=True)
 
         return jsonify(
             {
@@ -541,13 +775,18 @@ def connect_hydrants():
             }
         )
     except Exception as exc:
+        set_operation_progress("hydrants", 100, str(exc), done=True, error=True)
         print(traceback.format_exc())
         return jsonify({"success": False, "message": str(exc)}), 500
 
 
 @app.route("/snap_valves", methods=["POST"])
 def snap_valves():
+    set_operation_progress("valves", 1, "Preparing valve snapping…")
     try:
+        data = request.get_json(silent=True) or {}
+        modified_valves = data.get("valves") or []
+
         if MODEL_STORE["pipe_geojson"] is None:
             return (
                 jsonify({"success": False, "message": "No model has been loaded yet."}),
@@ -570,12 +809,31 @@ def snap_valves():
                 400,
             )
 
-        pipe_features = [
-            feature
-            for feature in MODEL_STORE["pipe_geojson"].get("features", [])
-            if feature.get("geometry")
-        ]
-        if not pipe_features:
+        pipe_features = MODEL_STORE["pipe_geojson"].get("features", [])
+        total_pipes = len(pipe_features)
+        pipe_geometries = []
+        valid_pipe_features = []
+        pipe_feature_by_geometry_id = {}
+        for pipe_index, pipe_feature in enumerate(pipe_features):
+            if pipe_index % max(1, total_pipes // 20 or 1) == 0:
+                set_operation_progress(
+                    "valves",
+                    2 + int((pipe_index / max(1, total_pipes)) * 7),
+                    f"Preparing pipe geometry {pipe_index + 1} of {total_pipes}…",
+                )
+            geometry = pipe_feature.get("geometry")
+            if not geometry:
+                continue
+            try:
+                pipe_geometry = shape(geometry)
+            except Exception:
+                continue
+            if pipe_geometry.is_valid:
+                pipe_geometries.append(pipe_geometry)
+                valid_pipe_features.append(pipe_feature)
+                pipe_feature_by_geometry_id[id(pipe_geometry)] = pipe_feature
+
+        if not pipe_geometries:
             return (
                 jsonify(
                     {
@@ -587,35 +845,60 @@ def snap_valves():
             )
 
         features = valves_layer["geojson"].get("features", [])
-        for feature in features:
+        if modified_valves:
+            features = _filter_modified_features("valves", modified_valves)
+
+        set_operation_progress("valves", 10, "Preparing nearest-pipe search…")
+        pipe_tree = STRtree(pipe_geometries)
+
+        total_valves = len(features)
+        for valve_index, feature in enumerate(features):
+            completed_fraction = valve_index / max(1, total_valves)
+            set_operation_progress(
+                "valves",
+                10 + int(completed_fraction * 76),
+                f"Snapping valve {valve_index + 1} of {total_valves}…",
+            )
             geometry = feature.get("geometry")
             if not geometry:
                 continue
 
             point = shape(geometry)
-            best_distance = None
-            best_location = None
-
-            for pipe_feature in pipe_features:
-                try:
-                    pipe_geometry = shape(pipe_feature.get("geometry"))
-                except Exception:
-                    continue
-
-                if not pipe_geometry.is_valid:
-                    continue
-
-                distance = point.distance(pipe_geometry)
-                if best_distance is None or distance < best_distance:
-                    best_distance = distance
-                    best_location = pipe_geometry.interpolate(
-                        pipe_geometry.project(point)
-                    )
+            nearest_pipe = pipe_tree.nearest(point)
+            try:
+                nearest_pipe_index = index_value(nearest_pipe)
+                nearest_pipe_feature = valid_pipe_features[nearest_pipe_index]
+                nearest_pipe = pipe_geometries[nearest_pipe_index]
+            except TypeError:
+                nearest_pipe_feature = pipe_feature_by_geometry_id[id(nearest_pipe)]
+            best_location = nearest_pipe.interpolate(nearest_pipe.project(point))
 
             if best_location is not None:
                 feature["geometry"]["coordinates"] = [best_location.x, best_location.y]
+            pipe_properties = nearest_pipe_feature.get("properties") or {}
+            pipe_name = pipe_properties.get("id") or pipe_properties.get("name")
+            feature.setdefault("properties", {})["model_pipe_name"] = pipe_name
+            feature["properties"]["model_pipe_nodes"] = [
+                node
+                for node in (
+                    pipe_properties.get("start_node"),
+                    pipe_properties.get("end_node"),
+                )
+                if node is not None
+            ]
+            _record_element_mapping(
+                "valves",
+                feature,
+                {
+                    "pipe": pipe_name,
+                    "nodes": feature["properties"]["model_pipe_nodes"],
+                },
+                valves_layer.get("id_field"),
+            )
 
         MODEL_STORE["uploaded_layers"]["valves"]["geojson"]["features"] = features
+
+        set_operation_progress("valves", 88, "Saving snapped valve locations…")
 
         save_dir = MODEL_STORE["uploaded_layers"]["valves"].get("path")
         shape_name = MODEL_STORE["uploaded_layers"]["valves"].get("shape_name")
@@ -632,6 +915,7 @@ def snap_valves():
                     "Warning: failed to write snapped valves shapefile back to disk:", e
                 )
 
+        set_operation_progress("valves", 100, "Valves snapped successfully.", done=True)
         return jsonify(
             {
                 "success": True,
@@ -640,6 +924,7 @@ def snap_valves():
             }
         )
     except Exception as exc:
+        set_operation_progress("valves", 100, str(exc), done=True, error=True)
         print(traceback.format_exc())
         return jsonify({"success": False, "message": str(exc)}), 500
 
@@ -692,6 +977,7 @@ def set_layer_id_field():
             )
 
         layer["id_field"] = id_field
+        _refresh_mapping_aliases(layer_type)
 
         return jsonify(
             {
@@ -817,11 +1103,19 @@ def update_feature_geometry():
                 404,
             )
 
+        # Preserve the stable GIS-to-model identity while replacing edited data.
+        existing_properties = features[matched_index].get("properties") or {}
+        updated_properties = feature.get("properties") or {}
+        if existing_properties.get("_mapping_id"):
+            updated_properties.setdefault("_mapping_id", existing_properties["_mapping_id"])
+        if existing_properties.get("model_elements"):
+            updated_properties.setdefault("model_elements", existing_properties["model_elements"])
+
         # Replace geometry (and optionally properties) for the matched feature
         features[matched_index]["geometry"] = feature.get("geometry")
         # Optionally update properties if provided
         if feature.get("properties"):
-            features[matched_index]["properties"] = feature.get("properties")
+            features[matched_index]["properties"] = updated_properties
 
         # Write back into model store
         MODEL_STORE["uploaded_layers"][layer_type]["geojson"]["features"] = features
@@ -919,6 +1213,8 @@ def upload_shapefile():
                     coords = feature["geometry"].get("coordinates")
                     if isinstance(coords, list) and len(coords) >= 2:
                         props["original_location"] = [coords[0], coords[1]]
+
+        MODEL_STORE.setdefault("element_mapping", {})[layer_type] = {}
 
         MODEL_STORE["uploaded_layers"][layer_type] = {
             "path": save_dir,
@@ -1072,7 +1368,8 @@ def receive_sequence_run_request(expected_count=None):
 @app.route("/run_sequences", methods=["POST"])
 def run_sequences():
     sequences, error = receive_sequence_run_request()
-    print(f"[DEBUG] Received sequences for run_sequences: {sequences}")
+
+    run_water_network_model(MODEL_STORE, sequences)
     if error:
         return error
 
@@ -1089,6 +1386,8 @@ def run_sequences():
 @app.route("/run_sequence", methods=["POST"])
 def run_sequence():
     sequences, error = receive_sequence_run_request(expected_count=1)
+
+    run_water_network_model(MODEL_STORE, sequences)
     if error:
         return error
 
@@ -1400,6 +1699,7 @@ def create_project_archive():
                 )
             },
         },
+        "element_mapping": MODEL_STORE.get("element_mapping", {}),
         "sequences": [
             sequence.get("name") for sequence in MODEL_STORE.get("sequences", [])
         ],
@@ -1471,7 +1771,7 @@ def restore_project_archive(project_file):
             wntr.network.write_inpfile(wn, inp_path)
 
         MODEL_STORE["wn"] = wn
-        MODEL_STORE["inp_path"] = inp_path
+        set_model_paths(inp_path)
         MODEL_STORE["model_crs"] = model_crs
         MODEL_STORE["pipe_geojson"] = water_network_pipes_to_geojson(
             wn=wn, model_crs=model_crs
@@ -1517,6 +1817,19 @@ def restore_project_archive(project_file):
 
         MODEL_STORE["sequences"] = sequences
 
+        saved_mapping = meta.get("element_mapping")
+        if isinstance(saved_mapping, dict) and all(
+            isinstance(saved_mapping.get(kind, {}), dict)
+            and all(isinstance(value, str) for value in saved_mapping.get(kind, {}).values())
+            for kind in ("hydrants", "valves")
+        ):
+            MODEL_STORE["element_mapping"] = {
+                "hydrants": saved_mapping.get("hydrants", {}),
+                "valves": saved_mapping.get("valves", {}),
+            }
+        else:
+            _restore_element_mapping_from_layers()
+
         return {
             "model_crs": model_crs,
             "pipe_geojson": MODEL_STORE["pipe_geojson"],
@@ -1557,6 +1870,7 @@ def make_project_response():
         ),
         "valves": get_uploaded_layer_response(MODEL_STORE["uploaded_layers"]["valves"]),
         "sequences": MODEL_STORE.get("sequences", []),
+        "element_mapping": MODEL_STORE.get("element_mapping", {}),
     }
 
 

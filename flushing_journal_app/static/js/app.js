@@ -7,6 +7,9 @@ let hydrantsLoaded = false;
 let valvesLoaded = false;
 let selectedValveMarker = null;
 let originalValveLocationMarker = null;
+let editModeActive = false;
+let movedHydrantMarkers = new Set();
+let movedValveMarkers = new Set();
 let currentSequences = [];
 let activeSequenceIndex = 0;
 let confirmModalResolve = null;
@@ -31,6 +34,7 @@ const PIPE_DIAMETER_STEP_IN_INCHES = 6;
 
 document.addEventListener("DOMContentLoaded", function () {
     initializeTabs();
+    initializeProjectStartupFlow();
     initializeSidebarModeButtons();
     initializeMap();
     initializeToolbar();
@@ -55,6 +59,66 @@ function initializeTabs() {
     });
 }
 
+function recordModifiedFeature(layerType, marker) {
+    if (!marker || !marker.feature) {
+        return;
+    }
+
+    if (layerType === 'hydrants') {
+        movedHydrantMarkers.add(marker);
+    } else if (layerType === 'valves') {
+        movedValveMarkers.add(marker);
+    }
+}
+
+async function finishEditingSession() {
+    const modifiedHydrants = Array.from(movedHydrantMarkers).map((marker) => marker.feature).filter(Boolean);
+    const modifiedValves = Array.from(movedValveMarkers).map((marker) => marker.feature).filter(Boolean);
+
+    movedHydrantMarkers.clear();
+    movedValveMarkers.clear();
+
+    if (modifiedHydrants.length) {
+        try {
+            const response = await fetch('/connect_hydrants', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ hydrants: modifiedHydrants })
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Hydrant re-connect failed.');
+            }
+            if (data.pipe_geojson) {
+                displayModelPipes(data.pipe_geojson);
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    if (modifiedValves.length || (modifiedHydrants.length && valvesLoaded)) {
+        try {
+            const response = await fetch('/snap_valves', modifiedHydrants.length
+                ? { method: 'POST' }
+                : {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ valves: modifiedValves })
+                });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Valve re-snap failed.');
+            }
+            if (data.geojson) {
+                displayPointLayer('valves', data.geojson);
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    }
+}
+
 async function persistMovedFeature(layerType, marker) {
     if (!marker) return;
 
@@ -63,6 +127,8 @@ async function persistMovedFeature(layerType, marker) {
         // nothing to persist
         return;
     }
+
+    recordModifiedFeature(layerType, marker);
 
     // try to determine id field and id value
     const idSelect = document.getElementById(`${layerType}IdFieldSelect`);
@@ -98,8 +164,43 @@ async function persistMovedFeature(layerType, marker) {
             throw new Error(data.message || 'Failed to save moved feature.');
         }
 
+        if (!editModeActive) {
+            const mappingResponse = await fetch(
+                layerType === 'hydrants' ? '/connect_hydrants' : '/snap_valves',
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [layerType]: [feature] })
+                }
+            );
+            const mappingData = await mappingResponse.json();
+            if (!mappingResponse.ok || !mappingData.success) {
+                throw new Error(mappingData.message || 'Failed to update the model element mapping.');
+            }
+
+            if (layerType === 'hydrants' && mappingData.pipe_geojson) {
+                displayModelPipes(mappingData.pipe_geojson);
+                movedHydrantMarkers.delete(marker);
+                if (valvesLoaded) {
+                    const valveMappingResponse = await fetch('/snap_valves', { method: 'POST' });
+                    const valveMappingData = await valveMappingResponse.json();
+                    if (!valveMappingResponse.ok || !valveMappingData.success) {
+                        throw new Error(valveMappingData.message || 'Failed to refresh valve mappings.');
+                    }
+                    if (valveMappingData.geojson) {
+                        displayPointLayer('valves', valveMappingData.geojson);
+                    }
+                }
+            } else if (layerType === 'valves' && mappingData.geojson) {
+                displayPointLayer('valves', mappingData.geojson);
+                movedValveMarkers.delete(marker);
+            }
+        }
+
         if (statusDiv) {
-            statusDiv.textContent = data.message || 'Moved feature saved.';
+            statusDiv.textContent = editModeActive
+                ? (data.message || 'Moved feature saved; model mapping updates when editing ends.')
+                : 'Moved feature saved and model mapping updated.';
         }
     } catch (err) {
         console.error(err);
@@ -125,27 +226,526 @@ function initializeSidebarModeButtons() {
         });
     });
 
-    // Initialize to the existing active button or default to project
-    const initial = document.querySelector('.sidebar-mode-button.active') || document.querySelector('.sidebar-mode-button[data-toolbar-target="project"]');
+    const initial = document.querySelector('.sidebar-mode-button.active') || document.querySelector('.sidebar-mode-button[data-toolbar-target="sequences"]') || document.querySelector('.sidebar-mode-button');
     if (initial) {
-        setActiveSidebarToolbar(initial.getAttribute('data-toolbar-target'));
+        setActiveSidebarToolbar(initial.getAttribute('data-toolbar-target') || 'sequences');
     } else {
-        setActiveSidebarToolbar('project');
+        setActiveSidebarToolbar('sequences');
     }
     updateAllLayersDraggability();
 }
 
 function updateAllLayersDraggability() {
-    const active = document.querySelector('.sidebar-mode-button.active')?.getAttribute('data-toolbar-target') || 'project';
+    const active = document.querySelector('.sidebar-mode-button.active')?.getAttribute('data-toolbar-target') || 'sequences';
+    const editingActive = editModeActive;
 
-    // Hydrants should be draggable only when hydrants toolbar is active
-    enableLayerDraggability('hydrants', active === 'hydrants');
-
-    // Valves should be draggable only when valves toolbar is active
-    enableLayerDraggability('valves', active === 'valves');
+    enableLayerDraggability('hydrants', editingActive || active === 'hydrants');
+    enableLayerDraggability('valves', editingActive || active === 'valves');
 }
 
 let renameModalResolve = null;
+let shouldOpenHydrantWizard = false;
+let currentLayerWizardType = null;
+
+function setModalProgress(progressId, percent, text, isError = false) {
+    const bar = document.getElementById(progressId);
+    const label = document.getElementById(progressId.replace("Bar", "Text"));
+    if (bar) {
+        bar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+        bar.style.background = isError ? "linear-gradient(90deg, #ef8f8f, #c53030)" : "linear-gradient(90deg, #59b2ec, #0b6fbd)";
+    }
+    if (label && text) {
+        label.textContent = text;
+    }
+}
+
+function startProgressPolling(progressId, operation) {
+    let operationStarted = false;
+
+    const refreshProgress = async function () {
+        try {
+            const response = await fetch(`/operation_progress/${operation}`, { cache: 'no-store' });
+            if (!response.ok) return;
+
+            const progress = await response.json();
+            if (!progress.done) {
+                operationStarted = true;
+            } else if (!operationStarted) {
+                // Ignore a completed state left by an earlier run if this poll
+                // beats the new operation request to the server.
+                return;
+            }
+
+            setModalProgress(progressId, progress.percent, progress.message, progress.error);
+        } catch (error) {
+            // The operation request remains authoritative; a transient poll
+            // failure should not interrupt it.
+        }
+    };
+
+    refreshProgress();
+    return setInterval(refreshProgress, 350);
+}
+
+function initializeProjectStartupFlow() {
+    const startupModal = document.getElementById("projectStartupModal");
+    const modelImportModal = document.getElementById("modelImportModal");
+    const importModal = document.getElementById("projectImportModal");
+    const importFileBtn = document.getElementById("projectImportFileBtn");
+    const closeImportModal = document.getElementById("closeProjectImportModal");
+    const closeModelImportModal = document.getElementById("closeModelImportModal");
+    const modelImportFileBtn = document.getElementById("modelImportFileBtn");
+    const uploadHydrantsModal = document.getElementById("uploadHydrantsModal");
+    const closeUploadHydrantsModal = document.getElementById("closeUploadHydrantsModal");
+    const uploadHydrantsModalBtn = document.getElementById("uploadHydrantsModalBtn");
+    const uploadValvesModal = document.getElementById("uploadValvesModal");
+    const closeUploadValvesModal = document.getElementById("closeUploadValvesModal");
+    const uploadValvesModalBtn = document.getElementById("uploadValvesModalBtn");
+    const hydrantConnectModal = document.getElementById("hydrantConnectModal");
+    const closeHydrantConnectModal = document.getElementById("closeHydrantConnectModal");
+    const connectHydrantsModalBtn = document.getElementById("connectHydrantsModalBtn");
+    const valveSnapModal = document.getElementById("valveSnapModal");
+    const closeValveSnapModal = document.getElementById("closeValveSnapModal");
+    const snapValvesModalBtn = document.getElementById("snapValvesModalBtn");
+
+    const layerWizardModal = document.getElementById("layerWizardModal");
+    const closeLayerWizardModal = document.getElementById("closeLayerWizardModal");
+    const layerWizardFileBtn = document.getElementById("layerWizardFileBtn");
+    const layerWizardNext = document.getElementById("layerWizardNext");
+    const layerWizardCancel = document.getElementById("layerWizardCancel");
+
+    if (!startupModal) {
+        return;
+    }
+
+    startupModal.classList.remove("hidden");
+
+    startupModal.querySelectorAll("[data-project-choice]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            const choice = button.getAttribute("data-project-choice");
+            startupModal.classList.add("hidden");
+
+            if (choice === "import") {
+                if (importModal) {
+                    importModal.classList.remove("hidden");
+                }
+                return;
+            }
+
+            shouldOpenHydrantWizard = true;
+            if (modelImportModal) {
+                modelImportModal.classList.remove("hidden");
+            }
+        });
+    });
+
+    if (closeImportModal) {
+        closeImportModal.addEventListener("click", function () {
+            importModal.classList.add("hidden");
+            startupModal.classList.remove("hidden");
+        });
+    }
+
+    if (closeModelImportModal) {
+        closeModelImportModal.addEventListener("click", function () {
+            modelImportModal.classList.add("hidden");
+            startupModal.classList.remove("hidden");
+        });
+    }
+
+    if (closeUploadHydrantsModal) {
+        closeUploadHydrantsModal.addEventListener("click", function () {
+            if (uploadHydrantsModal) {
+                uploadHydrantsModal.classList.add("hidden");
+            }
+            startupModal.classList.remove("hidden");
+        });
+    }
+
+    if (closeUploadValvesModal) {
+        closeUploadValvesModal.addEventListener("click", function () {
+            if (uploadValvesModal) {
+                uploadValvesModal.classList.add("hidden");
+            }
+            startupModal.classList.remove("hidden");
+        });
+    }
+
+    if (closeHydrantConnectModal) {
+        closeHydrantConnectModal.addEventListener("click", function () {
+            if (hydrantConnectModal) {
+                hydrantConnectModal.classList.add("hidden");
+            }
+            startupModal.classList.remove("hidden");
+        });
+    }
+
+    if (closeValveSnapModal) {
+        closeValveSnapModal.addEventListener("click", function () {
+            if (valveSnapModal) {
+                valveSnapModal.classList.add("hidden");
+            }
+            startupModal.classList.remove("hidden");
+        });
+    }
+
+    if (importFileBtn) {
+        importFileBtn.addEventListener("click", async function () {
+            if (importModal) {
+                importModal.classList.add("hidden");
+            }
+            await uploadProjectZip();
+        });
+    }
+
+    if (modelImportFileBtn) {
+        modelImportFileBtn.addEventListener("click", async function () {
+            if (modelImportModal) {
+                modelImportModal.classList.add("hidden");
+            }
+            await selectModelFile();
+        });
+    }
+
+    if (uploadHydrantsModalBtn) {
+        uploadHydrantsModalBtn.addEventListener("click", function () {
+            if (uploadHydrantsModal) {
+                uploadHydrantsModal.classList.add("hidden");
+            }
+            showLayerWizardModal("hydrants");
+        });
+    }
+
+    if (uploadValvesModalBtn) {
+        uploadValvesModalBtn.addEventListener("click", function () {
+            if (uploadValvesModal) {
+                uploadValvesModal.classList.add("hidden");
+            }
+            showLayerWizardModal("valves");
+        });
+    }
+
+    if (connectHydrantsModalBtn) {
+        connectHydrantsModalBtn.addEventListener("click", async function () {
+            await connectHydrantsToModel();
+            if (modelLoaded && hydrantsLoaded) {
+                if (hydrantConnectModal) {
+                    hydrantConnectModal.classList.add("hidden");
+                }
+                if (valveSnapModal) {
+                    valveSnapModal.classList.remove("hidden");
+                }
+            }
+        });
+    }
+
+    if (snapValvesModalBtn) {
+        snapValvesModalBtn.addEventListener("click", async function () {
+            await snapAllValvesToPipes();
+            if (modelLoaded && valvesLoaded) {
+                if (valveSnapModal) {
+                    valveSnapModal.classList.add("hidden");
+                }
+            }
+        });
+    }
+
+    const editProjectBtn = document.getElementById("editProjectBtn");
+    if (editProjectBtn) {
+        editProjectBtn.addEventListener("click", async function () {
+            editModeActive = !editModeActive;
+            editProjectBtn.classList.toggle("active", editModeActive);
+            updateAllLayersDraggability();
+
+            if (!editModeActive) {
+                await finishEditingSession();
+            }
+        });
+    }
+
+    if (layerWizardModal && closeLayerWizardModal) {
+        closeLayerWizardModal.addEventListener("click", function () {
+            layerWizardModal.classList.add("hidden");
+            currentLayerWizardType = null;
+        });
+    }
+
+    if (layerWizardModal && layerWizardFileBtn) {
+        layerWizardFileBtn.addEventListener("click", function () {
+            selectWizardLayerFile();
+        });
+    }
+
+    if (layerWizardModal && layerWizardNext) {
+        layerWizardNext.addEventListener("click", async function () {
+            await continueLayerWizard();
+        });
+    }
+
+    if (layerWizardModal && layerWizardCancel) {
+        layerWizardCancel.addEventListener("click", function () {
+            layerWizardModal.classList.add("hidden");
+            currentLayerWizardType = null;
+        });
+    }
+}
+
+function showProjectStartupModal() {
+    const startupModal = document.getElementById("projectStartupModal");
+    if (startupModal) {
+        startupModal.classList.remove("hidden");
+    }
+}
+
+async function openNewProjectSetupDialog() {
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = ".inp";
+    fileInput.style.display = "none";
+
+    document.body.appendChild(fileInput);
+
+    const file = await new Promise((resolve) => {
+        fileInput.addEventListener("change", function () {
+            resolve(fileInput.files[0]);
+        }, { once: true });
+
+        fileInput.click();
+    });
+
+    document.body.removeChild(fileInput);
+
+    if (!file) {
+        showProjectStartupModal();
+        return;
+    }
+
+    showEpsgModal(file);
+}
+
+function showLayerWizardModal(layerType) {
+    const modal = document.getElementById("layerWizardModal");
+    const title = document.getElementById("layerWizardTitle");
+    const copy = document.getElementById("layerWizardCopy");
+    const fileButton = document.getElementById("layerWizardFileBtn");
+    const selectedFile = document.getElementById("layerWizardSelectedFile");
+    const fieldGroup = document.getElementById("layerWizardFieldGroup");
+    const fieldSelect = document.getElementById("layerWizardFieldSelect");
+    const nextButton = document.getElementById("layerWizardNext");
+    const errorBox = document.getElementById("layerWizardError");
+
+    if (!modal || !title || !copy || !fileButton || !selectedFile || !fieldGroup || !fieldSelect || !nextButton || !errorBox) {
+        return;
+    }
+
+    currentLayerWizardType = layerType;
+    title.textContent = layerType === "hydrants" ? "Hydrant setup" : "Valve setup";
+    copy.textContent = layerType === "hydrants"
+        ? "Upload the hydrant shapefile and choose the ID field used to match the model."
+        : "Upload the valve shapefile and choose the ID field used to match the model.";
+
+    selectedFile.textContent = "";
+    fieldSelect.innerHTML = "";
+    fieldGroup.classList.add("hidden");
+    errorBox.textContent = "";
+    nextButton.textContent = "Continue";
+    modal.classList.remove("hidden");
+    fileButton.focus();
+}
+
+async function selectWizardLayerFile() {
+    if (!currentLayerWizardType) {
+        return;
+    }
+
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = currentLayerWizardType === "sequences" ? ".txt" : ".shp,.shx,.dbf,.prj";
+    fileInput.multiple = true;
+    fileInput.style.display = "none";
+
+    document.body.appendChild(fileInput);
+
+    const files = await new Promise((resolve) => {
+        fileInput.addEventListener("change", function () {
+            resolve(Array.from(fileInput.files || []));
+        }, { once: true });
+
+        fileInput.click();
+    });
+
+    document.body.removeChild(fileInput);
+
+    if (!files.length) {
+        const errorBox = document.getElementById("layerWizardError");
+        if (errorBox) {
+            errorBox.textContent = "No files were selected.";
+        }
+        return;
+    }
+
+    const formData = new FormData();
+    files.forEach(function (file) {
+        formData.append("shape_files", file);
+    });
+    formData.append("layer_type", currentLayerWizardType);
+
+    const selectedFile = document.getElementById("layerWizardSelectedFile");
+    const errorBox = document.getElementById("layerWizardError");
+    const fieldGroup = document.getElementById("layerWizardFieldGroup");
+    const fieldSelect = document.getElementById("layerWizardFieldSelect");
+
+    if (selectedFile) {
+        selectedFile.textContent = files.map((file) => file.name).join(", ");
+    }
+
+    try {
+        const response = await fetch("/upload_shapefile", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || "Shapefile upload failed.");
+        }
+
+        displayPointLayer(currentLayerWizardType, data.geojson);
+        setLayerStatus(currentLayerWizardType, `Loaded ${data.feature_count} ${currentLayerWizardType} features.`, false);
+
+        const fieldNames = data.field_names || [];
+        fieldSelect.innerHTML = "";
+
+        if (!fieldNames.length) {
+            throw new Error("No ID fields were found in the selected shapefile.");
+        }
+
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Select ID field";
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        fieldSelect.appendChild(placeholder);
+
+        fieldNames.forEach(function (fieldName) {
+            const option = document.createElement("option");
+            option.value = fieldName;
+            option.textContent = fieldName;
+            fieldSelect.appendChild(option);
+        });
+
+        if (data.selected_id_field && fieldNames.includes(data.selected_id_field)) {
+            fieldSelect.value = data.selected_id_field;
+        }
+
+        fieldGroup.classList.remove("hidden");
+        errorBox.textContent = "";
+        if (currentLayerWizardType === "hydrants") {
+            hydrantsLoaded = true;
+            updateConnectHydrantsButtonState();
+        }
+        if (currentLayerWizardType === "valves") {
+            valvesLoaded = true;
+            updateSnapValvesButtonState();
+        }
+    } catch (error) {
+        console.error(error);
+        if (errorBox) {
+            errorBox.textContent = error.message || "Unable to load the selected shapefile.";
+        }
+        if (currentLayerWizardType === "hydrants") {
+            hydrantsLoaded = false;
+            updateConnectHydrantsButtonState();
+        }
+    }
+}
+
+async function continueLayerWizard() {
+    if (!currentLayerWizardType) {
+        return;
+    }
+
+    const fieldSelect = document.getElementById("layerWizardFieldSelect");
+    const errorBox = document.getElementById("layerWizardError");
+
+    if (!fieldSelect || !fieldSelect.value) {
+        if (errorBox) {
+            errorBox.textContent = "Please choose an ID field before continuing.";
+        }
+        return;
+    }
+
+    try {
+        await setLayerIdField(currentLayerWizardType, fieldSelect.value);
+        const modal = document.getElementById("layerWizardModal");
+        if (modal) {
+            modal.classList.add("hidden");
+        }
+
+        if (currentLayerWizardType === "hydrants") {
+            showLayerWizardModal("valves");
+        } else {
+            const hydrantConnectModal = document.getElementById("hydrantConnectModal");
+            if (hydrantConnectModal) {
+                hydrantConnectModal.classList.remove("hidden");
+            }
+            currentLayerWizardType = null;
+        }
+    } catch (error) {
+        if (errorBox) {
+            errorBox.textContent = error.message || "Unable to save the ID field.";
+        }
+    }
+}
+
+function hideLayerWizard() {
+    const modal = document.getElementById("layerWizardModal");
+    if (modal) {
+        modal.classList.add("hidden");
+    }
+    currentLayerWizardType = null;
+}
+
+function setProjectStartupWizardEnabled(enabled) {
+    const startupModal = document.getElementById("projectStartupModal");
+    if (!startupModal) {
+        return;
+    }
+
+    if (enabled) {
+        startupModal.classList.remove("hidden");
+    } else {
+        startupModal.classList.add("hidden");
+    }
+}
+
+function closeProjectImportModal() {
+    const importModal = document.getElementById("projectImportModal");
+    if (importModal) {
+        importModal.classList.add("hidden");
+    }
+}
+
+function hideProjectStartupModal() {
+    const startupModal = document.getElementById("projectStartupModal");
+    if (startupModal) {
+        startupModal.classList.add("hidden");
+    }
+}
+
+function hideProjectImportModal() {
+    const importModal = document.getElementById("projectImportModal");
+    if (importModal) {
+        importModal.classList.add("hidden");
+    }
+}
+
+function hideProjectSetupModals() {
+    hideProjectStartupModal();
+    hideProjectImportModal();
+    hideLayerWizard();
+}
 
 function initializeSequenceDialogs() {
     const confirmModal = document.getElementById('confirmModal');
@@ -729,13 +1329,15 @@ function initializeModelUpload() {
     const epsgInput = document.getElementById("epsgInput");
     const epsgError = document.getElementById("epsgModalError");
 
-    if (!loadModelBtn || !modal || !closeBtn || !cancelBtn || !confirmBtn || !epsgInput || !epsgError) {
+    if (!modal || !closeBtn || !cancelBtn || !confirmBtn || !epsgInput || !epsgError) {
         return;
     }
 
-    loadModelBtn.addEventListener("click", async function () {
-        await selectModelFile();
-    });
+    if (loadModelBtn) {
+        loadModelBtn.addEventListener("click", async function () {
+            await selectModelFile();
+        });
+    }
 
     closeBtn.addEventListener("click", hideEpsgModal);
     cancelBtn.addEventListener("click", hideEpsgModal);
@@ -887,6 +1489,7 @@ function initializeLayerUpload() {
 
     const sequenceTabContainer = document.getElementById("sequenceTabs");
     const sequencePanelContainer = document.getElementById("sequencePanels");
+    const loadSequencesBtn = document.getElementById("loadSequencesBtn");
     const addSequenceBtn = document.getElementById("addSequenceBtn");
 
     if (sequenceTabContainer) {
@@ -902,10 +1505,16 @@ function initializeLayerUpload() {
     if (addSequenceBtn) {
         addSequenceBtn.addEventListener("click", addSequence);
     }
+
+    if (loadSequencesBtn) {
+        loadSequencesBtn.addEventListener("click", function () {
+            uploadPointShapefile("sequences");
+        });
+    }
 }
 
 async function downloadProjectZip() {
-    const projectStatus = document.getElementById("projectLoadStatus");
+    const projectStatus = document.getElementById("projectLoadStatus") || document.getElementById("projectImportStatus");
     if (projectStatus) {
         projectStatus.textContent = "Exporting project...";
         projectStatus.classList.remove("error");
@@ -961,7 +1570,7 @@ async function uploadProjectZip() {
 
     document.body.removeChild(fileInput);
 
-    const projectStatus = document.getElementById("projectLoadStatus");
+    const projectStatus = document.getElementById("projectLoadStatus") || document.getElementById("projectImportStatus");
     if (!file) {
         if (projectStatus) {
             projectStatus.textContent = "No project file selected.";
@@ -1047,6 +1656,10 @@ async function uploadPointShapefile(layerType) {
     document.body.removeChild(fileInput);
 
     if (!files.length) {
+        if (layerType === "sequences") {
+            setSequenceStatus("No sequence files selected.", true);
+            return;
+        }
         setLayerStatus(layerType, "No files selected.", true);
         return;
     }
@@ -1265,6 +1878,14 @@ async function submitModelFile(file, modelCrs, modelTimestep=0) {
         setModelStatus(`Loaded ${data.pipe_count} pipes from model.`, false);
         modelLoaded = true;
         updateConnectHydrantsButtonState();
+
+        if (shouldOpenHydrantWizard) {
+            shouldOpenHydrantWizard = false;
+            setTimeout(function () {
+                showLayerWizardModal("hydrants");
+            }, 150);
+        }
+
         // If server returned the model_timestep used for the snapshot, update options toolbar input
         try {
             const optInput = document.getElementById('modelTimestepInput');
@@ -1899,7 +2520,7 @@ function addValveMarker(latlng, label, status, targetLayer, layerType, feature) 
 
     const icon = createValveIcon(color, false);
 
-    const active = document.querySelector('.sidebar-mode-button.active')?.getAttribute('data-toolbar-target') || 'project';
+    const active = document.querySelector('.sidebar-mode-button.active')?.getAttribute('data-toolbar-target') || 'hydrants';
     const draggable = active === (layerType || 'valves');
 
     const marker = L.marker(latlng, {
@@ -1929,6 +2550,7 @@ function addValveMarker(latlng, label, status, targetLayer, layerType, feature) 
             if (marker.feature && marker.feature.geometry) {
                 marker.feature.geometry.coordinates = [p.lng, p.lat];
             }
+            recordModifiedFeature('valves', marker);
             persistMovedFeature('valves', marker);
             if (selectedValveMarker === marker) {
                 renderSelectedValveOriginalLocation(marker);
@@ -1969,7 +2591,7 @@ function addHydrantMarker(latlng, label, status, targetLayer, layerType, feature
         iconAnchor: [8, 8]
     });
 
-    const active = document.querySelector('.sidebar-mode-button.active')?.getAttribute('data-toolbar-target') || 'project';
+    const active = document.querySelector('.sidebar-mode-button.active')?.getAttribute('data-toolbar-target') || 'hydrants';
     const draggable = active === (layerType || 'hydrants');
 
     const marker = L.marker(latlng, {
@@ -1989,6 +2611,7 @@ function addHydrantMarker(latlng, label, status, targetLayer, layerType, feature
             if (marker.feature && marker.feature.geometry) {
                 marker.feature.geometry.coordinates = [p.lng, p.lat];
             }
+            recordModifiedFeature('hydrants', marker);
             persistMovedFeature('hydrants', marker);
         });
     } else {
@@ -2069,15 +2692,18 @@ function renderSelectedValveOriginalLocation(marker) {
 
 async function snapAllValvesToPipes() {
     const snapValvesBtn = document.getElementById('snapValvesBtn');
-    const snapStatus = document.getElementById('valvesSnapStatus');
-    if (!snapValvesBtn || !snapStatus) {
-        return;
+    const snapStatus = document.getElementById('valveSnapStatus') || document.getElementById('valvesSnapStatus');
+    const progressId = 'valveSnapProgressBar';
+    const progressTextId = 'valveSnapProgressText';
+    const progressInterval = startProgressPolling(progressId, 'valves');
+
+    if (snapValvesBtn) {
+        snapValvesBtn.disabled = true;
     }
-
-    snapValvesBtn.disabled = true;
-    snapStatus.textContent = 'Snapping valves to closest pipes...';
-    snapStatus.classList.remove('error');
-
+    if (snapStatus) {
+        snapStatus.textContent = 'Snapping valves to closest pipes...';
+        snapStatus.classList.remove('error');
+    }
     try {
         const response = await fetch('/snap_valves', {
             method: 'POST'
@@ -2089,14 +2715,25 @@ async function snapAllValvesToPipes() {
         }
 
         displayPointLayer('valves', data.geojson);
-        snapStatus.textContent = data.message || 'Valves snapped successfully.';
+        if (snapStatus) {
+            snapStatus.textContent = data.message || 'Valves snapped successfully.';
+        }
         valvesLoaded = true;
+        setModalProgress(progressId, 100, 'Valves snapped successfully.');
         updateSnapValvesButtonState();
     } catch (error) {
         console.error(error);
-        snapStatus.textContent = error.message;
-        snapStatus.classList.add('error');
+        if (snapStatus) {
+            snapStatus.textContent = error.message;
+            snapStatus.classList.add('error');
+        }
+        setModalProgress(progressId, 100, error.message || 'Valve snap failed.', true);
     } finally {
+        clearInterval(progressInterval);
+        const progressLabel = document.getElementById(progressTextId);
+        if (progressLabel && progressLabel.textContent.includes('failed')) {
+            progressLabel.textContent = progressLabel.textContent;
+        }
         if (snapValvesBtn) {
             snapValvesBtn.disabled = !(modelLoaded && valvesLoaded);
         }
@@ -2105,16 +2742,17 @@ async function snapAllValvesToPipes() {
 
 async function connectHydrantsToModel() {
     const connectHydrantsBtn = document.getElementById("connectHydrantsBtn");
-    const hydrantsConnectStatus = document.getElementById("hydrantsConnectStatus");
+    const hydrantsConnectStatus = document.getElementById("hydrantConnectStatus") || document.getElementById("hydrantsConnectStatus");
+    const progressId = 'hydrantConnectProgressBar';
+    const progressInterval = startProgressPolling(progressId, 'hydrants');
 
-    if (!connectHydrantsBtn) {
-        return;
+    if (connectHydrantsBtn) {
+        connectHydrantsBtn.disabled = true;
     }
-
-    connectHydrantsBtn.disabled = true;
-    hydrantsConnectStatus.textContent = "Connecting hydrants to model...";
-    hydrantsConnectStatus.classList.remove("error");
-
+    if (hydrantsConnectStatus) {
+        hydrantsConnectStatus.textContent = "Connecting hydrants to model...";
+        hydrantsConnectStatus.classList.remove("error");
+    }
     try {
         const response = await fetch("/connect_hydrants", {
             method: "POST",
@@ -2130,14 +2768,25 @@ async function connectHydrantsToModel() {
         }
 
         displayModelPipes(data.pipe_geojson);
-        hydrantsConnectStatus.textContent = data.message || "Hydrants connected successfully.";
+        if (hydrantsConnectStatus) {
+            hydrantsConnectStatus.textContent = data.message || "Hydrants connected successfully.";
+        }
         modelLoaded = true;
+        hydrantsLoaded = true;
+        setModalProgress(progressId, 100, 'Hydrants connected successfully.');
         updateConnectHydrantsButtonState();
     } catch (error) {
         console.error(error);
-        hydrantsConnectStatus.textContent = error.message;
-        hydrantsConnectStatus.classList.add("error");
-        connectHydrantsBtn.disabled = false;
+        if (hydrantsConnectStatus) {
+            hydrantsConnectStatus.textContent = error.message;
+            hydrantsConnectStatus.classList.add("error");
+        }
+        setModalProgress(progressId, 100, error.message || 'Hydrant connection failed.', true);
+        if (connectHydrantsBtn) {
+            connectHydrantsBtn.disabled = false;
+        }
+    } finally {
+        clearInterval(progressInterval);
     }
 }
 

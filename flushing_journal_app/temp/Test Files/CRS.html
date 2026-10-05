@@ -1,0 +1,101 @@
+<html>
+<head>
+    <title>EPSG Search</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        #results {
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            max-width: 600px;
+        }
+
+        .result {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+
+        .result:hover {
+            background-color: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+
+    <label for="crsSearch">Coordinate System:</label><br>
+    <input
+        type="text"
+        id="crsSearch"
+        placeholder="Search coordinate systems..."
+        style="width:400px;"
+    >
+
+    <div id="results"></div>
+
+    <script>
+        let debounceTimer;
+
+        document.getElementById("crsSearch").addEventListener("input", function () {
+            clearTimeout(debounceTimer);
+
+            const searchText = this.value.trim();
+
+            debounceTimer = setTimeout(() => {
+                if (searchText.length < 2) {
+                    document.getElementById("results").innerHTML = "";
+                    return;
+                }
+
+                searchCoordinateSystems(searchText);
+            }, 300);
+        });
+
+        async function searchCoordinateSystems(searchText) {
+            const resultsDiv = document.getElementById("results");
+
+            try {
+                const response = await fetch(
+                    `https://epsg.io/?format=json&q=${encodeURIComponent(searchText)}`
+                );
+
+                const data = await response.json();
+
+                resultsDiv.innerHTML = "";
+
+                if (!data.results || data.results.length === 0) {
+                    resultsDiv.innerHTML = "<div class='result'>No matches found</div>";
+                    return;
+                }
+
+                data.results.slice(0, 10).forEach(item => {
+                    const div = document.createElement("div");
+                    div.className = "result";
+
+                    div.innerHTML = `
+                        <strong>${item.code}</strong> - ${item.name}
+                    `;
+
+                    div.addEventListener("click", () => {
+                        document.getElementById("crsSearch").value =
+                            `${item.name} (EPSG:${item.code})`;
+
+                        resultsDiv.innerHTML = "";
+                    });
+
+                    resultsDiv.appendChild(div);
+                });
+
+            } catch (error) {
+                console.error(error);
+                resultsDiv.innerHTML =
+                    "<div class='result'>Error searching coordinate systems</div>";
+            }
+        }
+    </script>
+
+</body>
+</html>
