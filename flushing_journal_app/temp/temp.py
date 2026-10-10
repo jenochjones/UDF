@@ -5,7 +5,9 @@ Created on Sun Oct  4 20:12:01 2026
 
 @author: jonjones
 """
-
+import ctypes
+from ctypes import byref
+from wntr.epanet.util import SizeLimits
 from wntr.epanet import toolkit as en
 
 import pandas as pd
@@ -22,7 +24,7 @@ Returns:
     dict: The updated model store after running the model.
 """
 
-sequences = {
+sequences = [{
     "name": "Z1-33",
     "operations": [
         {
@@ -326,13 +328,9 @@ sequences = {
             "map_message": "All valves back to normal",
         },
     ],
-}
+}]
 
 
-
-import ctypes
-from ctypes import byref
-from wntr.epanet.util import SizeLimits
 
 def get_link_id(en, link_index):
     """
@@ -369,35 +367,69 @@ def get_link_id(en, link_index):
     return buffer.value.decode("utf-8")
 
 
+def close_epanet_model(en_model):
+    """
+    Safely close an EPANET hydraulic analysis and project.
+    """
+    if en_model is None:
+        return
 
+    try:
+        en_model.ENcloseH()
+    except Exception:
+        pass
+
+    try:
+        en_model.ENclose()
+    except Exception:
+        pass
+
+
+def reset_epanet_model(inp_file, rpt_file, bin_file, model_time_hours):
+    """
+    Create a fresh EPANET model from the original INP file.
+
+    Each call returns a new ENepanet instance, so all valve statuses,
+    emitter coefficients, hydraulic results, and simulation time are
+    reset to the values in the original INP file.
+    """
+    en_model = en.ENepanet()
+    en_model.ENopen(inp_file, rpt_file, bin_file)
+
+    en_model.ENopenH()
+    en_model.ENinitH(0)
+
+    # Advance the fresh model to the requested model time.
+    target_time = model_time_hours * 3600
+    hydraulic_time = 0
+
+    while hydraulic_time < target_time:
+        hydraulic_time = en_model.ENrunH()
+
+        if hydraulic_time >= target_time:
+            break
+
+        hydraulic_step = en_model.ENnextH()
+
+        if hydraulic_step <= 0:
+            break
+
+    return en_model
 
 
 
 
 model_time = 9 # Default to 24 hours if not specified
 
-inp_file = '/Users/jonjones/temp/updated.inp'
-rpt_file = '/Users/jonjones/temp/updated.rpt'
-bin_file = '/Users/jonjones/temp/updated.bin'
+inp_file = r'C:\WebApps\UDF\flushing_journal_app\temp\updated.inp'
+rpt_file = r'C:\WebApps\UDF\flushing_journal_app\temp\updated.rpt'
+bin_file = r'C:\WebApps\UDF\flushing_journal_app\temp\updated.bin'
 
-namespace = {}; exec(open('/Users/jonjones/temp/my_dict.txt').read(), namespace); mapping = namespace['mapping']
+results_dict = {}
 
-enData = en.ENepanet()
+namespace = {}; exec(open(r'C:\WebApps\UDF\flushing_journal_app\temp\my_dict.txt').read(), namespace); mapping = namespace['mapping']
 
-enData.ENopen(inp_file, rpt_file, bin_file)
-
-# --- Initialize hydraulics ---
-enData.ENopenH()
-enData.ENinitH(0)
-
-t = 0
-
-while t < model_time * 3600:
-    t = enData.ENrunH()
-    tstep = enData.ENnextH()
-
-    if tstep <= 0:
-        break
+enData = reset_epanet_model(inp_file, rpt_file, bin_file, model_time)
 
 base_n_links = enData.ENgetcount(2)
 
@@ -418,20 +450,22 @@ for i in range(1, base_n_links + 1):
 
 base_results_df = pd.DataFrame(base_results)
 
+close_epanet_model(enData)
 
 
 for sequence in sequences:
-    operation_model = enData.copy()
+    operation_model = reset_epanet_model(inp_file, rpt_file, bin_file, model_time)
     print(f"[DEBUG] Processing sequence: {sequence['name']}")
+    results_dict[sequence["name"]] = {}
     for operation in sequence["operations"]:
 
-        updated_inp = f"/Users/jonjones/temp/{sequence['name']}_{operation['name']}.inp"
+        updated_inp = r'C:\WebApps\UDF\flushing_journal_app\temp\\' + f"{sequence['name']}_{operation['name']}.inp"
 
         valves_to_close = operation.get("close_valves", []) or []
         valves_to_open = operation.get("open_valves", []) or []
         hydrants_to_open = operation.get("open_hydrants", []) or []
 
-        orifice_size = operation.get("orifice_size", None)
+        orifice_size = orifice_size = float(operation.get("orifice_size") or 2.5)
 
         emitter_coefficient = 28.35 * (orifice_size ** 2) if orifice_size is not None else None
 
@@ -468,14 +502,17 @@ for sequence in sequences:
                 })
 
             results_df = pd.DataFrame(results)
+            
+            results_dict[sequence['name']][operation['name']] = results_df
 
             print(results_df.head())
+            
+            for hydrant in hydrants_to_open:
+                if hydrant in mapping:
+                    enData.ENsetnodevalue(mapping[hydrant], 3, 0)  # Close hydrants
 
-    operation_model.ENcloseH()
-    operation_model.ENclose()
+    close_epanet_model(operation_model)
 
-enData.ENcloseH()
-enData.ENclose()
     
     
     
