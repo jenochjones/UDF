@@ -10,6 +10,8 @@ from ctypes import byref
 from wntr.epanet.util import SizeLimits
 from wntr.epanet import toolkit as en
 
+import wntr
+
 import pandas as pd
 
 
@@ -421,13 +423,17 @@ def reset_epanet_model(inp_file, rpt_file, bin_file, model_time_hours):
 
 model_time = 9 # Default to 24 hours if not specified
 
-inp_file = r'C:\WebApps\UDF\flushing_journal_app\temp\updated.inp'
-rpt_file = r'C:\WebApps\UDF\flushing_journal_app\temp\updated.rpt'
-bin_file = r'C:\WebApps\UDF\flushing_journal_app\temp\updated.bin'
+#inp_file = r'C:\WebApps\UDF\flushing_journal_app\temp\updated.inp'
+#rpt_file = r'C:\WebApps\UDF\flushing_journal_app\temp\updated.rpt'
+#bin_file = r'C:\WebApps\UDF\flushing_journal_app\temp\updated.bin'
+
+inp_file = '/Users/jonjones/Sites/UDF/flushing_journal_app/temp/updated.inp'
+rpt_file = '/Users/jonjones/Sites/UDF/flushing_journal_app/temp/updated.rpt'
+bin_file = '/Users/jonjones/Sites/UDF/flushing_journal_app/temp/updated.bin'
 
 results_dict = {}
 
-namespace = {}; exec(open(r'C:\WebApps\UDF\flushing_journal_app\temp\my_dict.txt').read(), namespace); mapping = namespace['mapping']
+namespace = {}; exec(open('/Users/jonjones/Sites/UDF/flushing_journal_app/temp/my_dict.txt').read(), namespace); mapping = namespace['mapping']
 
 enData = reset_epanet_model(inp_file, rpt_file, bin_file, model_time)
 
@@ -444,11 +450,13 @@ for i in range(1, base_n_links + 1):
     flow = enData.ENgetlinkvalue(i, 8)
 
     base_results.append({
+        "PipeID": link_id,
         "Velocity": velocity,
         "Flow": flow
     })
 
 base_results_df = pd.DataFrame(base_results)
+base_results_df.set_index('PipeID', inplace=True)
 
 close_epanet_model(enData)
 
@@ -459,11 +467,17 @@ for sequence in sequences:
     results_dict[sequence["name"]] = {}
     for operation in sequence["operations"]:
 
-        updated_inp = r'C:\WebApps\UDF\flushing_journal_app\temp\\' + f"{sequence['name']}_{operation['name']}.inp"
+        #updated_inp = r'C:\WebApps\UDF\flushing_journal_app\temp\\' + f"{sequence['name']}_{operation['name']}.inp"
+        
+        updated_inp = '/Users/jonjones/Sites/UDF/flushing_journal_app/temp/inpFiles/' + f"{sequence['name']}_{operation['name']}.inp"
 
         valves_to_close = operation.get("close_valves", []) or []
         valves_to_open = operation.get("open_valves", []) or []
         hydrants_to_open = operation.get("open_hydrants", []) or []
+        
+        print(f'Opening: {valves_to_open}')
+        print(f'Closing: {valves_to_close}')
+        print(f'Flushing: {hydrants_to_open}')
 
         orifice_size = orifice_size = float(operation.get("orifice_size") or 2.5)
 
@@ -481,7 +495,7 @@ for sequence in sequences:
             if hydrant in mapping:
                 enData.ENsetnodevalue(mapping[hydrant], 3, emitter_coefficient)  # Open hydrant
 
-        if hydrants_to_open is not []:
+        if hydrants_to_open:
             operation_model.ENrunH()
             operation_model.ENsaveinpfile(updated_inp)
 
@@ -497,15 +511,23 @@ for sequence in sequences:
                 flow = operation_model.ENgetlinkvalue(i, 8)
 
                 results.append({
+                    "PipeID": link_id,
                     "Velocity": velocity,
                     "Flow": flow
                 })
 
             results_df = pd.DataFrame(results)
+            results_df.set_index('PipeID', inplace=True)
             
-            results_dict[sequence['name']][operation['name']] = results_df
-
-            print(results_df.head())
+            results_df = results_df[results_df['Velocity'] > 5]
+            
+            comp_df = base_results_df.loc[base_results_df.index.intersection(results_df.index)]
+            
+            vel_dif = results_df / comp_df
+            
+            results_dict[sequence['name']][operation['name']] = vel_dif
+            
+            
             
             for hydrant in hydrants_to_open:
                 if hydrant in mapping:
