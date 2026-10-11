@@ -7244,6 +7244,7 @@ PRV_Z3-Z2_EAGLECOURT Closed
 
 [PATTERNS]
 ;ID        Multipliers
+1    1
 
 [CURVES]
 ;ID         X-Value      Y-Value     
@@ -7395,7 +7396,7 @@ ACCURACY             0.001
 CHECKFREQ            2
 MAXCHECK             10
 UNBALANCED           STOP                
-PATTERN                                  
+PATTERN              1                    
 DEMAND MULTIPLIER    1
 PRESSURE             PSI                 
 EMITTER EXPONENT     0.5
