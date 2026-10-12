@@ -1,4 +1,4 @@
-from wntr.epanet import toolkit as en
+import wntr
 
 import pandas as pd
 
@@ -15,104 +15,78 @@ def run_water_network_model(model_store: dict, sequences: list) -> dict:
         dict: The updated model store after running the model.
     """
 
-    model_time = model_store.get("model_time", 0)  # Default to 24 hours if not specified
-
     inp_file = model_store.get("inp_path")
-    rpt_file = model_store.get("rpt_path")
-    bin_file = model_store.get("bin_path")
 
     mapping = model_store.get("element_mapping", {})
 
-    enData = en.ENepanet()
+    results_dict = {}
 
-    enData.ENopen(inp_file, rpt_file, bin_file)
+    namespace = {}; exec(open('./my_dict.txt').read(), namespace); mapping = namespace['mapping']
 
-    # --- Initialize hydraulics ---
-    enData.ENopenH()
-    enData.ENinitH(0)
+    #wn = wntr.network.io.read_inpfile(inp_file)
 
-    t = 0
+    base_wn = wntr.network.WaterNetworkModel(inp_file)
 
-    while t < model_time * 3600:
-        t = enData.ENrunH()
-        tstep = enData.ENnextH()
+    sim = wntr.sim.EpanetSimulator(base_wn)
+    base_results = sim.run_sim()
 
-        if tstep <= 0:
-            break
+    base_velocity = base_results.link['velocity'].transpose() * 3.28084
+    base_velocity.columns = ['velocity']
 
-    base_n_links = enData.ENgetcount(2)
-    
-    base_results = []
-
-    #base_results_df.to_csv('/Users/jonjones/temp/base_results.csv', index=False)
-
-    with open('/Users/jonjones/temp/my_dict.txt', 'w') as f: f.write(f"mapping = {repr(mapping)}")
-
-    enData.ENsaveinpfile('/Users/jonjones/temp/updated.inp')
-    enData.ENcloseH()
-    enData.ENclose()
-    '''
     for sequence in sequences:
-        operation_model = enData.copy()
+        seq_wn = wntr.network.WaterNetworkModel(inp_file)
+
         print(f"[DEBUG] Processing sequence: {sequence['name']}")
+        results_dict[sequence["name"]] = {}
         for operation in sequence["operations"]:
 
-            updated_inp = f"{sequence['name']}_{operation['name']}.inp"
+            updated_inp = './inpFiles/' + f"{sequence['name']}_{operation['name']}.inp"
 
             valves_to_close = operation.get("close_valves", []) or []
             valves_to_open = operation.get("open_valves", []) or []
             hydrants_to_open = operation.get("open_hydrants", []) or []
 
-            orifice_size = operation.get("orifice_size", None)
+            orifice_size = orifice_size = float(operation.get("orifice_size") or 2.5)
 
-            emitter_coefficient = 28.35 * (orifice_size ** 2) if orifice_size is not None else None
+            emitter_coefficient = 28.35 * (orifice_size ** 2) / 13293.8648 if orifice_size is not None else None
 
             for valve in valves_to_close:
-                if valve in mapping:
-                    enData.ENsetlinkvalue(mapping[valve], 4, 0)  # Close valve
-
+                if valve in mapping['valves']:
+                    pipe_id = mapping['valves'][valve]
+                    pipe = seq_wn.get_link(pipe_id)
+                    pipe.initial_status = 'Closed'
             for valve in valves_to_open:
-                if valve in mapping:
-                    enData.ENsetlinkvalue(mapping[valve], 4, 1)  # Open valve
-
+                if valve in mapping['valves']:
+                    pipe_id = mapping['valves'][valve]
+                    pipe = seq_wn.get_link(pipe_id)
+                    pipe.initial_status = 'Open'
             for hydrant in hydrants_to_open:
-                if hydrant in mapping:
-                    enData.ENsetnodevalue(mapping[hydrant], 3, emitter_coefficient)  # Open hydrant
+                if hydrant in mapping['hydrants']:
+                    junct_id = mapping['hydrants'][hydrant]
+                    junct = seq_wn.get_node(junct_id)
+                    junct.emitter_coefficient = emitter_coefficient
+                    
+            if hydrants_to_open:
+                wntr.network.write_inpfile(seq_wn, updated_inp)
+                sim = wntr.sim.EpanetSimulator(seq_wn)
+                seq_results = sim.run_sim()
 
-            if hydrants_to_open is not []:
-                operation_model.ENrunH()
-                operation_model.ENsaveinpfile(updated_inp)
+                seq_velocity = seq_results.link['velocity'].transpose() * 3.28084
+                seq_velocity.columns = ['velocity']
+                
 
-                n_links = operation_model.ENgetcount(operation_model.EN_LINKCOUNT)
-
-                results = []
-
-                for i in range(1, n_links + 1):
-
-                    link_id = operation_model.ENgetlinkid(i)
-                    link_type = operation_model.ENgetlinktype(i)
-
-                    # Link type 1 = Pipe
-                    if link_type == operation_model.EN_PIPE:
-
-                        velocity = operation_model.ENgetlinkvalue(i, operation_model.EN_VELOCITY)
-                        flow = operation_model.ENgetlinkvalue(i, operation_model.EN_FLOW)
-
-                        results.append({
-                            "PipeID": link_id,
-                            "Velocity": velocity,
-                            "Flow": flow
-                        })
-
-                results_df = pd.DataFrame(results)
-
-                print(results_df.head())
-
-        operation_model.ENcloseH()
-        operation_model.ENclose()
-
-    enData.ENcloseH()
-    enData.ENclose()
-    '''
+                results_df = seq_velocity[seq_velocity['velocity'] > 5]
+                comp_df = base_velocity.loc[base_velocity.index.intersection(results_df.index)]
+                
+                vel_dif = results_df / comp_df
+                
+                results_dict[sequence['name']][operation['name']] = vel_dif
+                
+                for hydrant in hydrants_to_open:
+                    if hydrant in mapping:
+                        junct_id = mapping['hydrants'][hydrant]
+                        junct = seq_wn.get_node(junct_id)
+                        junct.emmitter_coefficient = emitter_coefficient
+        
 
         
