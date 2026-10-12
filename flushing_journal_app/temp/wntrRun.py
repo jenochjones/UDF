@@ -385,20 +385,23 @@ for sequence in sequences:
 
         orifice_size = orifice_size = float(operation.get("orifice_size") or 2.5)
 
-        emitter_coefficient = 28.35 * (orifice_size ** 2) if orifice_size is not None else None
+        emitter_coefficient = 28.35 * (orifice_size ** 2) / 13293.8648 if orifice_size is not None else None
 
         for valve in valves_to_close:
-            if valve in mapping:
-                pipe = seq_wn.get_link(valve)
-                pipe.initial_status = 'Close'
+            if valve in mapping['valves']:
+                pipe_id = mapping['valves'][valve]
+                pipe = seq_wn.get_link(pipe_id)
+                pipe.initial_status = 'Closed'
         for valve in valves_to_open:
-            if valve in mapping:
-                pipe = seq_wn.get_link(valve)
+            if valve in mapping['valves']:
+                pipe_id = mapping['valves'][valve]
+                pipe = seq_wn.get_link(pipe_id)
                 pipe.initial_status = 'Open'
         for hydrant in hydrants_to_open:
-            if hydrant in mapping:
-                junct = seq_wn.get_node(hydrant)
-                junct.emmitter_coefficient = emitter_coefficient
+            if hydrant in mapping['hydrants']:
+                junct_id = mapping['hydrants'][hydrant]
+                junct = seq_wn.get_node(junct_id)
+                junct.emitter_coefficient = emitter_coefficient
                 
         if hydrants_to_open:
             wntr.network.write_inpfile(seq_wn, updated_inp)
@@ -420,6 +423,7 @@ for sequence in sequences:
             
             for hydrant in hydrants_to_open:
                 if hydrant in mapping:
-                     junct = seq_wn.get_node(hydrant)
-                     junct.emmitter_coefficient = emitter_coefficient
+                    junct_id = mapping['hydrants'][hydrant]
+                    junct = seq_wn.get_node(junct_id)
+                    junct.emmitter_coefficient = emitter_coefficient
     

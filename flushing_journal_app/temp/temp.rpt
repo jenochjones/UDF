@@ -1,4 +1,4 @@
-  Page 1                                    Sun Oct 11 12:59:04 2026
+  Page 1                                    Mon Oct 12 07:20:47 2026
 
   ******************************************************************
   *                           E P A N E T                          *
@@ -7,27 +7,29 @@
   *                         Version 2.2                            *
   ******************************************************************
   
-  Analysis begun Sun Oct 11 12:59:04 2026
+  Analysis begun Mon Oct 12 07:20:47 2026
 
    
   Hydraulic Status:
   -----------------------------------------------------------------------
      0:00:00: Balancing the network:
 
-              Trial  1: relative flow change = 1.632934
-              Trial  2: relative flow change = 0.377666
-              PRV PRV_Z2-Z1_400N switched from active to closed
-              Trial  3: relative flow change = 0.204422
-              PRV PRV_Z2-Z1_400N switched from closed to active
-              Trial  4: relative flow change = 0.082424
-              Trial  5: relative flow change = 0.029442
-              Trial  6: relative flow change = 0.018089
-              Trial  7: relative flow change = 0.001842
-              Trial  8: relative flow change = 0.000038
-                        maximum  flow change = 2.4361 for Link P1123
-                        maximum  head error  = 0.0000 for Link P1127
+              Trial  1: relative flow change = 1.159120
+              Trial  2: relative flow change = 0.710217
+              PRV PRV_Z2-Z1_400N switched from active to open
+              Trial  3: relative flow change = 0.487155
+              PRV PRV_Z2-Z1_400N switched from open to active
+              Trial  4: relative flow change = 0.165286
+              PRV PRV_Z2-Z1_400N switched from active to open
+              Trial  5: relative flow change = 0.148305
+              Trial  6: relative flow change = 0.084703
+              Trial  7: relative flow change = 0.013754
+              Trial  8: relative flow change = 0.005274
+              Trial  9: relative flow change = 0.000080
+                        maximum  flow change = 1.9013 for Link P3103
+                        maximum  head error  = 0.0000 for Link P1121
 
-     0:00:00: Balanced after 8 trials
+     0:00:00: Balanced after 9 trials
      0:00:00: Reservoir RES_SEALWELL is emptying
      0:00:00: Reservoir RES_CARNESECCAWELL is emptying
      0:00:00: Reservoir RES_WESTWOODWELL is emptying
@@ -35,10 +37,11 @@
      0:00:00: Reservoir SPR_MAPLECANYON_SPRINGS is emptying
      0:00:00: Tank T3_LOWERTANK is emptying at 6.13 ft
      0:00:00: Tank T1_MAPLE1 is emptying at 16.05 ft
-     0:00:00: Tank T2_MAPLE2 is filling at 16.05 ft
+     0:00:00: Tank T2_MAPLE2 is emptying at 16.05 ft
      0:00:00: Tank T4_WESTWOOD is closed at 15.00 ft
-     0:00:00: Tank T5_CROWD is filling at 18.24 ft
+     0:00:00: Tank T5_CROWD is emptying at 18.24 ft
+     0:00:00: PRV PRV_Z2-Z1_400N open
    
   WARNING: Negative pressures at 0:00:00 hrs.
    
-  Analysis ended Sun Oct 11 12:59:04 2026
+  Analysis ended Mon Oct 12 07:20:47 2026
