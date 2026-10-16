@@ -323,12 +323,46 @@ def run_water_network_model(
     minimum_flush_velocity_fps = numeric_option("min_flush_vel", 5.0)
     volume_turnovers = numeric_option("volume_turnovers", 3.0)
     default_orifice_diam = numeric_option("default_orifice_diam", 2.5)
+    max_flush_length = numeric_option(
+        "max_flush_length", 5280.0, allow_zero=True
+    )
+    max_flush_diam = numeric_option(
+        "max_flush_diam", 20.0, allow_zero=True
+    )
+    max_flush_vel = numeric_option(
+        "max_flush_vel", 10.0, allow_zero=True
+    )
+    min_res_pres = numeric_option(
+        "min_res_pres", 20.0, allow_zero=True
+    )
+    #pres_drop_warning_limit = numeric_option(
+    #    "pres_drop_warning_limit", 10.0, allow_zero=True
+    #)
+    try:
+        pipes_to_reflush_value = float(run_options.get("pipes_to_reflush", 1))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Flushing option 'pipes_to_reflush' must be an integer.") from exc
+    if (
+        not math.isfinite(pipes_to_reflush_value)
+        or pipes_to_reflush_value < 0
+        or not pipes_to_reflush_value.is_integer()
+    ):
+        raise ValueError(
+            "Flushing option 'pipes_to_reflush' must be a non-negative integer."
+        )
+    pipes_to_reflush = int(pipes_to_reflush_value)
     run_options.update(
         {
             "start_vel_to_flushing_vel_ratio": velocity_multiplier,
             "min_flush_vel": minimum_flush_velocity_fps,
             "volume_turnovers": volume_turnovers,
             "default_orifice_diam": default_orifice_diam,
+            "max_flush_length": max_flush_length,
+            "max_flush_diam": max_flush_diam,
+            "max_flush_vel": max_flush_vel,
+            "min_res_pres": min_res_pres,
+            #"pres_drop_warning_limit": pres_drop_warning_limit,
+            "pipes_to_reflush": pipes_to_reflush,
         }
     )
     model_store["flush_options"] = run_options
@@ -366,8 +400,29 @@ def run_water_network_model(
         nearest_index = min(result_df.index, key=lambda value: abs(value - timestep))
         return result_df.loc[nearest_index].copy()
 
+    def _get_node_result_row(results, result_name, timestep=None):
+        result_df = results.node[result_name]
 
-    def trace_flushing_path(wn, starting_node_name, base_velocity, flushing_velocity, already_flushed, velocity_limit_fps, velocity_multiplier):
+        if timestep is None:
+            return result_df.iloc[-1].copy()
+
+        if timestep in result_df.index:
+            return result_df.loc[timestep].copy()
+
+        nearest_index = min(result_df.index, key=lambda value: abs(value - timestep))
+        return result_df.loc[nearest_index].copy()
+
+
+    def trace_flushing_path(
+        wn,
+        starting_node_name,
+        base_velocity,
+        flushing_velocity,
+        already_flushed,
+        velocity_limit_fps,
+        velocity_multiplier,
+        pipes_to_reflush=1,
+    ):
         velocity_limit_mps = velocity_limit_fps / M_TO_FT
 
         pipe_adjacency = {}
@@ -423,11 +478,13 @@ def run_water_network_model(
                 else:
                     flush_ratio = pipe_velocity / base_pipe_velocity
 
-                if pipe_count >= 1:
-                    is_flushed = (pipe_velocity > velocity_limit_mps and flush_ratio > velocity_multiplier and pipe_name not in already_flushed)
+                if wn.get_link(pipe_name).link_type.lower() == "pipe":
+                    if pipe_count >= pipes_to_reflush:
+                        is_flushed = (pipe_velocity > velocity_limit_mps and flush_ratio > velocity_multiplier and pipe_name not in already_flushed)
+                    else:
+                        is_flushed = (pipe_velocity > velocity_limit_mps and flush_ratio > velocity_multiplier)
                 else:
-                    is_flushed = (pipe_velocity > velocity_limit_mps and flush_ratio > velocity_multiplier)
-
+                    is_flushed = False
 
                 if is_flushed:
                     qualifying_pipes.append(pipe_name)
@@ -453,6 +510,7 @@ def run_water_network_model(
             velocity_multiplier=3.0,
             minimum_flush_velocity_fps=5.0,
             volume_turnovers=3.0,
+            pipes_to_reflush=1,
             timestep=None):
 
         
@@ -460,6 +518,7 @@ def run_water_network_model(
             "sequence_name": sequence_name,
             "operation_name": operation_name,
             "hydrant_nodes": list(hydrant_node_ids),
+            "warnings": [],
 
             "flushed_pipes": [],
             "flushed_pipe_velocity_fps": [],
@@ -532,7 +591,16 @@ def run_water_network_model(
                 })
                 continue
             
-            flushed_pipes = trace_flushing_path(wn, hydrant_node_id, base_velocity_mps, flush_velocity_mps, already_flushed, minimum_flush_velocity_fps, velocity_multiplier)
+            flushed_pipes = trace_flushing_path(
+                wn,
+                hydrant_node_id,
+                base_velocity_mps,
+                flush_velocity_mps,
+                already_flushed,
+                minimum_flush_velocity_fps,
+                velocity_multiplier,
+                pipes_to_reflush,
+            )
             
             if len(flushed_pipes) > 0:
                 for pipe_id in flushed_pipes:
@@ -635,6 +703,14 @@ def run_water_network_model(
     completed_operations = 0
 
     for sequence in sequences:
+        for previous_sequence_results in results_dict.values():
+            for previous_operation_result in previous_sequence_results.values():
+                previously_flushed_pipes = previous_operation_result.get(
+                    "flushed_pipes", []
+                )
+                if isinstance(previously_flushed_pipes, (list, tuple, set)):
+                    already_flushed.update(previously_flushed_pipes)
+
         seq_wn = wntr.network.WaterNetworkModel(inp_file)
 
         results_dict[sequence["name"]] = {}
@@ -699,11 +775,32 @@ def run_water_network_model(
             operation_volume_turnovers = operation_numeric_option(
                 "volume_turnovers", volume_turnovers
             )
+            raw_pipes_to_reflush = operation_options.get("pipes_to_reflush")
+            if raw_pipes_to_reflush is None or raw_pipes_to_reflush == "":
+                raw_pipes_to_reflush = pipes_to_reflush
+            try:
+                operation_pipes_to_reflush_value = float(raw_pipes_to_reflush)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Operation option 'pipes_to_reflush' for "
+                    f"'{operation.get('name', '')}' must be an integer."
+                ) from exc
+            if (
+                not math.isfinite(operation_pipes_to_reflush_value)
+                or operation_pipes_to_reflush_value < 0
+                or not operation_pipes_to_reflush_value.is_integer()
+            ):
+                raise ValueError(
+                    f"Operation option 'pipes_to_reflush' for "
+                    f"'{operation.get('name', '')}' must be a non-negative integer."
+                )
+            operation_pipes_to_reflush = int(operation_pipes_to_reflush_value)
             effective_operation_options = {
                 "default_orifice_diam": operation_orifice_diam,
                 "start_vel_to_flushing_vel_ratio": operation_velocity_multiplier,
                 "min_flush_vel": operation_min_flush_velocity_fps,
                 "volume_turnovers": operation_volume_turnovers,
+                "pipes_to_reflush": operation_pipes_to_reflush,
             }
 
             emitter_coefficient = (
@@ -759,9 +856,122 @@ def run_water_network_model(
                     velocity_multiplier=operation_velocity_multiplier,
                     minimum_flush_velocity_fps=operation_min_flush_velocity_fps,
                     volume_turnovers=operation_volume_turnovers,
+                    pipes_to_reflush=operation_pipes_to_reflush,
                     timestep=None,  # Uses final simulation timestep
                 )
                 operation_results["options"] = effective_operation_options
+
+                warnings = []
+                total_flush_length_ft = operation_results.get(
+                    "total_flush_length_ft"
+                )
+                if (
+                    total_flush_length_ft is not None
+                    and total_flush_length_ft > max_flush_length
+                ):
+                    warnings.append({
+                        "check": "Maximum flush length",
+                        "summary": (
+                            f"Total flush length is {total_flush_length_ft:.1f} ft, "
+                            f"above the {max_flush_length:.1f} ft maximum."
+                        ),
+                    })
+
+                for pipe_id in operation_results["flushed_pipes"]:
+                    pipe_diameter_in = float(
+                        seq_wn.get_link(pipe_id).diameter
+                    ) * M_TO_IN
+                    if pipe_diameter_in > max_flush_diam:
+                        warnings.append({
+                            "check": "Maximum flush diameter",
+                            "summary": (
+                                f"Pipe {pipe_id} is {pipe_diameter_in:.1f} in "
+                                f"in diameter, above the {max_flush_diam:.1f} in maximum."
+                            ),
+                        })
+
+                hydrant_lateral_pipes = set()
+                hydrant_connection_nodes = set()
+                for hydrant_node_id in hydrant_node_ids:
+                    for link_name, link in seq_wn.pipes():
+                        if link.start_node_name == hydrant_node_id:
+                            hydrant_lateral_pipes.add(link_name)
+                            hydrant_connection_nodes.add(link.end_node_name)
+                        elif link.end_node_name == hydrant_node_id:
+                            hydrant_lateral_pipes.add(link_name)
+                            hydrant_connection_nodes.add(link.start_node_name)
+
+                flush_velocities = operation_results.get(
+                    "flushed_pipe_velocity_fps", []
+                )
+                for pipe_id, velocity_fps in zip(
+                    operation_results["flushed_pipes"], flush_velocities
+                ):
+                    if (
+                        pipe_id not in hydrant_lateral_pipes
+                        and abs(float(velocity_fps)) > max_flush_vel
+                    ):
+                        warnings.append({
+                            "check": "Maximum flush velocity",
+                            "summary": (
+                                f"Pipe {pipe_id} has a flush velocity of "
+                                f"{abs(float(velocity_fps)):.2f} ft/s, above the "
+                                f"{max_flush_vel:.2f} ft/s maximum."
+                            ),
+                        })
+
+                psi_per_meter = 0.433527504 * M_TO_FT
+                flush_node_pressure = _get_node_result_row(
+                    seq_results, "pressure"
+                )
+                for connection_node in sorted(hydrant_connection_nodes):
+                    if connection_node not in flush_node_pressure.index:
+                        raise RuntimeError(
+                            f"Pressure results are missing hydrant connection node "
+                            f"'{connection_node}'."
+                        )
+                    residual_pressure_psi = (
+                        float(flush_node_pressure[connection_node])
+                        * psi_per_meter
+                    )
+                    if residual_pressure_psi <= min_res_pres:
+                        warnings.append({
+                            "check": "Minimum residual pressure",
+                            "summary": (
+                                f"Node {connection_node} has residual pressure of "
+                                f"{residual_pressure_psi:.2f} psi, at or below the "
+                                f"{min_res_pres:.2f} psi minimum."
+                            ),
+                        })
+
+                #base_node_pressure = _get_node_result_row(
+                #    base_results, "pressure"
+                #)
+                #pressure_drop_limit_m = pres_drop_warning_limit / psi_per_meter
+                #shared_nodes = (
+                #    base_node_pressure.index.intersection(
+                #        flush_node_pressure.index
+                #    )
+                #)
+                #for node_name in shared_nodes:
+                    #pressure_drop_m = (
+                    #    float(base_node_pressure[node_name])
+                    #    - float(flush_node_pressure[node_name])
+                    #)
+                    #if pressure_drop_m > pressure_drop_limit_m:
+                    #    pressure_drop_psi = (
+                    #        pressure_drop_m * psi_per_meter
+                    #    )
+                    #    warnings.append({
+                    #        "check": "Pressure drop",
+                    #        "summary": (
+                    #            f"Node {node_name} pressure dropped "
+                    #            f"{pressure_drop_psi:.2f} psi from the base model, "
+                    #            f"above the {pres_drop_warning_limit:.2f} psi limit."
+                    #        ),
+                    #    })
+
+                operation_results["warnings"] = warnings
 
                 results_dict[sequence["name"]][operation["name"]] = (
                     operation_results

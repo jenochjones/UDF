@@ -60,6 +60,7 @@ MODEL_STORE = {
         "model_timestep": 0,
         "default_orifice_diam": 2.5,
         "volume_turnovers": 3.0,
+        "pipes_to_reflush": 1,
         "min_flush_vel": 5.0,
         "start_vel_to_flushing_vel_ratio": 3.0,
     },
@@ -209,6 +210,7 @@ def upload_model():
             "model_timestep": model_timestep,
             "default_orifice_diam": 2.5,
             "volume_turnovers": 3.0,
+            "pipes_to_reflush": 1,
             "min_flush_vel": 5.0,
             "start_vel_to_flushing_vel_ratio": 3.0,
         }
@@ -1954,14 +1956,24 @@ def create_project_archive():
                     MODEL_STORE["uploaded_layers"]["hydrants"].get("id_field")
                     if MODEL_STORE["uploaded_layers"]["hydrants"]
                     else None
-                )
+                ),
+                "fields": (
+                    MODEL_STORE["uploaded_layers"]["hydrants"].get("fields", [])
+                    if MODEL_STORE["uploaded_layers"]["hydrants"]
+                    else []
+                ),
             },
             "valves": {
                 "id_field": (
                     MODEL_STORE["uploaded_layers"]["valves"].get("id_field")
                     if MODEL_STORE["uploaded_layers"]["valves"]
                     else None
-                )
+                ),
+                "fields": (
+                    MODEL_STORE["uploaded_layers"]["valves"].get("fields", [])
+                    if MODEL_STORE["uploaded_layers"]["valves"]
+                    else []
+                ),
             },
         },
         "element_mapping": MODEL_STORE.get("element_mapping", {}),
@@ -2166,6 +2178,7 @@ def restore_project_archive(project_file):
             "model_timestep": 0,
             "default_orifice_diam": 2.5,
             "volume_turnovers": 3.0,
+            "pipes_to_reflush": 1,
             "min_flush_vel": 5.0,
             "start_vel_to_flushing_vel_ratio": 3.0,
         }
@@ -2194,16 +2207,37 @@ def restore_project_archive(project_file):
                 geojson = json.loads(
                     archive.read(f"{layer_name}.geojson").decode("utf-8")
                 )
-                field_names = sorted(
+                geojson_field_names = sorted(
                     {
                         key
                         for feature in geojson.get("features", [])
                         for key in (feature.get("properties") or {}).keys()
                     }
                 )
-                id_field = (
-                    meta.get("uploaded_layers", {}).get(layer_name, {}).get("id_field")
-                )
+                layer_meta = meta.get("uploaded_layers", {}).get(layer_name, {})
+                saved_fields = layer_meta.get("fields")
+                if (
+                    isinstance(saved_fields, list)
+                    and all(isinstance(field_name, str) for field_name in saved_fields)
+                ):
+                    field_names = list(saved_fields)
+                else:
+                    generated_fields = {
+                        "model_elements",
+                        "original_location",
+                        "hydrant_junction_name",
+                        "connection_node_name",
+                        "hydrant_pipe_name",
+                        "model_pipe_name",
+                        "model_pipe_nodes",
+                    }
+                    field_names = [
+                        field_name
+                        for field_name in geojson_field_names
+                        if field_name not in generated_fields
+                    ]
+
+                id_field = layer_meta.get("id_field")
                 if id_field not in field_names:
                     id_field = None
 
@@ -2258,8 +2292,12 @@ def restore_project_archive(project_file):
         return {
             "model_crs": model_crs,
             "pipe_geojson": MODEL_STORE["pipe_geojson"],
-            "hydrants": MODEL_STORE["uploaded_layers"]["hydrants"],
-            "valves": MODEL_STORE["uploaded_layers"]["valves"],
+            "hydrants": get_uploaded_layer_response(
+                MODEL_STORE["uploaded_layers"]["hydrants"]
+            ),
+            "valves": get_uploaded_layer_response(
+                MODEL_STORE["uploaded_layers"]["valves"]
+            ),
             "sequences": sequences,
             "results_dict": results_dict,
             "options": {
@@ -2282,7 +2320,7 @@ def send_project_archive():
     )
 
 
-def get_uploaded_layer_response(layer_name, layer):
+def get_uploaded_layer_response(layer):
     if not layer:
         return None
 

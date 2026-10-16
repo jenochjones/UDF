@@ -11,10 +11,12 @@ let editModeActive = false;
 let mapSelectionModeActive = false;
 let selectedMapFeatures = { valves: new Map(), hydrants: new Map() };
 let selectedLayerIdFields = { valves: null, hydrants: null };
+let layerIdFieldNames = { valves: [], hydrants: [] };
 let movedHydrantMarkers = new Set();
 let movedValveMarkers = new Set();
 let currentSequences = [];
 let activeSequenceIndex = 0;
+let sequenceSaveQueue = Promise.resolve(true);
 let playbackSteps = [];
 let activePlaybackStep = -1;
 let playbackTimer = null;
@@ -53,6 +55,7 @@ document.addEventListener("DOMContentLoaded", function () {
     initializeLayerUpload();
     initializeSequenceDialogs();
     initializePdfDownload();
+    initializeOperationWarningsDialog();
 });
 const valveSnapInput = document.getElementById("valveSnapDistanceInput");
 if (valveSnapInput) {
@@ -669,8 +672,11 @@ function initializeProjectStartupFlow() {
         if (!currentLayerWizardType) {
             return;
         }
-        selectedLayerIdFields[currentLayerWizardType] = layerWizardFieldSelect.value || null;
-        refreshPointLayerPopups(currentLayerWizardType);
+        populateLayerFieldSelect(
+            currentLayerWizardType,
+            layerIdFieldNames[currentLayerWizardType],
+            layerWizardFieldSelect.value || null
+        );
     });
 
     if (layerWizardModal && layerWizardNext) {
@@ -814,6 +820,12 @@ async function selectWizardLayerFile() {
         refreshPointLayerPopups(currentLayerWizardType);
 
         const fieldNames = data.field_names || [];
+        layerIdFieldNames[currentLayerWizardType] = fieldNames;
+        populateLayerFieldSelect(
+            currentLayerWizardType,
+            fieldNames,
+            data.selected_id_field || ""
+        );
         fieldSelect.innerHTML = "";
 
         if (!fieldNames.length) {
@@ -847,6 +859,9 @@ async function selectWizardLayerFile() {
         if (currentLayerWizardType === "valves") {
             valvesLoaded = true;
             updateSnapValvesButtonState();
+        } else {
+            populateLayerFieldSelect("valves", [], "");
+            valvesLoaded = false;
         }
     } catch (error) {
         console.error(error);
@@ -970,7 +985,8 @@ function initializeSequenceDialogs() {
         default_orifice_diam: document.getElementById('operationOrificeDiameterInput'),
         start_vel_to_flushing_vel_ratio: document.getElementById('operationVelocityRatioInput'),
         min_flush_vel: document.getElementById('operationMinFlushVelocityInput'),
-        volume_turnovers: document.getElementById('operationVolumeTurnoversInput')
+        volume_turnovers: document.getElementById('operationVolumeTurnoversInput'),
+        pipes_to_reflush: document.getElementById('operationPipesToReflushInput')
     };
 
     const runAllSequencesBtn = document.getElementById('runAllSequencesBtn');
@@ -1195,6 +1211,7 @@ function initializeSequenceDialogs() {
                 ...(window.lastWaterNetworkResults || {}),
                 ...(data.results_dict || {})
             };
+            updateOperationWarningIndicators();
             setSequencePlaybackResults(
                 currentSequences,
                 window.lastWaterNetworkResults
@@ -1258,7 +1275,8 @@ function showOperationOptionsDialog(sequenceIndex, operationIndex, operation) {
         default_orifice_diam: "operationOrificeDiameterInput",
         start_vel_to_flushing_vel_ratio: "operationVelocityRatioInput",
         min_flush_vel: "operationMinFlushVelocityInput",
-        volume_turnovers: "operationVolumeTurnoversInput"
+        volume_turnovers: "operationVolumeTurnoversInput",
+        pipes_to_reflush: "operationPipesToReflushInput"
     };
     Object.entries(optionInputs).forEach(([key, inputId]) => {
         const input = document.getElementById(inputId);
@@ -1293,17 +1311,27 @@ function showConfirmDialog(message) {
 }
 
 async function saveSequencesToServer() {
-    try {
-        await fetch('/save_sequences', {
+    const requestBody = JSON.stringify({ sequences: currentSequences });
+    const pendingSave = sequenceSaveQueue.then(async () => {
+        const response = await fetch('/save_sequences', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ sequences: currentSequences })
+            body: requestBody
         });
-    } catch (error) {
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Failed to save sequences.');
+        }
+        return true;
+    });
+    sequenceSaveQueue = pendingSave.catch((error) => {
         console.error('Failed to save sequences:', error);
-    }
+        return false;
+    });
+    return sequenceSaveQueue;
 }
 
 function addSequence() {
@@ -1700,7 +1728,25 @@ function initializeSequencePlayback() {
 }
 
 function setSequencePlaybackResults(sequences, results) {
-    clearSequencePlayback();
+    const selectedSequenceName = currentSequences[activeSequenceIndex]?.name;
+    const currentStep = playbackSteps[activePlaybackStep];
+    const currentOperationName = currentStep?.sequence.name === selectedSequenceName
+        ? currentStep.operation.name
+        : null;
+    const playbackFilter = document.getElementById("sequencePlaybackFilter");
+    const showVelocities = document.getElementById("sequencePlaybackVelocities");
+    const playbackFilterChecked = Boolean(playbackFilter?.checked);
+    const showVelocitiesChecked = Boolean(showVelocities?.checked);
+
+    clearSequencePlayback({ preserveToggleState: true });
+    if (playbackFilter) {
+        playbackFilter.checked = playbackFilterChecked;
+    }
+    if (showVelocities) {
+        showVelocities.checked = showVelocitiesChecked;
+    }
+    document.getElementById("sequenceVelocityLegend")
+        ?.classList.toggle("hidden", !showVelocitiesChecked);
 
     (Array.isArray(sequences) ? sequences : []).forEach((sequence, sequenceIndex) => {
         (sequence.operations || []).forEach((operation, operationIndex) => {
@@ -1721,24 +1767,40 @@ function setSequencePlaybackResults(sequences, results) {
         return;
     }
 
-    showSequencePlaybackStep(0);
+    const preferredStepIndex = playbackSteps.findIndex(
+        (step) =>
+            step.sequence.name === selectedSequenceName
+            && step.operation.name === currentOperationName
+    );
+    const selectedSequenceFirstStep = playbackSteps.findIndex(
+        (step) => step.sequence.name === selectedSequenceName
+    );
+    showSequencePlaybackStep(
+        preferredStepIndex >= 0
+            ? preferredStepIndex
+            : selectedSequenceFirstStep >= 0
+                ? selectedSequenceFirstStep
+                : 0
+    );
 }
 
-function clearSequencePlayback() {
+function clearSequencePlayback({ preserveToggleState = false } = {}) {
     stopSequencePlayback();
     playbackSteps = [];
     activePlaybackStep = -1;
     const playbackFilter = document.getElementById("sequencePlaybackFilter");
-    if (playbackFilter) {
+    if (playbackFilter && !preserveToggleState) {
         playbackFilter.checked = false;
         playbackFilter.disabled = true;
     }
     const showVelocities = document.getElementById("sequencePlaybackVelocities");
-    if (showVelocities) {
+    if (showVelocities && !preserveToggleState) {
         showVelocities.checked = false;
         showVelocities.disabled = true;
     }
-    document.getElementById("sequenceVelocityLegend")?.classList.add("hidden");
+    if (!preserveToggleState) {
+        document.getElementById("sequenceVelocityLegend")?.classList.add("hidden");
+    }
     document.querySelectorAll(".animation-current").forEach((element) => {
         element.classList.remove("animation-current");
     });
@@ -2187,8 +2249,9 @@ function initializeOptionsToolbar() {
         start_vel_to_flushing_vel_ratio: "startVelToFlushingVelRatioInput",
         min_flush_vel: "minFlushVelInput",
         volume_turnovers: "volumeTurnoversInput",
+        pipes_to_reflush: "pipesToReflushInput",
         min_res_pres: "minResPresInput",
-        pres_drop_warning_limit: "presDropWarningLimitInput",
+        //pres_drop_warning_limit: "presDropWarningLimitInput",
         max_flush_vel: "maxFlushVelInput",
         max_flush_length: "maxFlushLengthInput",
         max_flush_diam: "maxFlushDiamInput"
@@ -2204,6 +2267,7 @@ function initializeOptionsToolbar() {
         if (options && Number.isFinite(Number(options.valve_snap_distance_ft))) {
             valveSnapDistanceFt = Number(options.valve_snap_distance_ft);
         }
+
         const valveSnapDistanceInput = document.getElementById("valveSnapDistanceInput");
         if (valveSnapDistanceInput) {
             valveSnapDistanceInput.value = String(valveSnapDistanceFt);
@@ -2214,9 +2278,10 @@ function initializeOptionsToolbar() {
             normalizedOptions.search_dist = savedConnection.search_distance_ft;
         }
         flushOptions = {
-            pres_drop_warning_limit: 10.0,
+            //pres_drop_warning_limit: 50.0,
             default_orifice_diam: 2.5,
             volume_turnovers: 3.0,
+            pipes_to_reflush: 1,
             max_flush_diam: 20.0,
             max_flush_length: 5280,
             lateral_diam: 5.99,
@@ -2244,7 +2309,7 @@ function initializeOptionsToolbar() {
             modelTimestepValue: `${selectedModelHour} hour`,
             lateralDiamValue: `${flushOptions.lateral_diam} in`,
             lateralRoughnessValue: flushOptions.lateral_roughness,
-            searchDistValue: `${flushOptions.search_dist} ft`,
+            //searchDistValue: `${flushOptions.search_dist} ft`,
         };
         Object.entries(displayValues).forEach(([id, value]) => {
             const output = document.getElementById(id);
@@ -2339,14 +2404,24 @@ function initializeLayerUpload() {
     });
 
     if (valvesIdFieldSelect) {
-        valvesIdFieldSelect.addEventListener("change", function () {
-            setLayerIdField("valves", valvesIdFieldSelect.value);
+        valvesIdFieldSelect.addEventListener("change", async function () {
+            const previousField = selectedLayerIdFields.valves || "";
+            try {
+                await setLayerIdField("valves", valvesIdFieldSelect.value);
+            } catch {
+                valvesIdFieldSelect.value = previousField;
+            }
         });
     }
 
     if (hydrantsIdFieldSelect) {
-        hydrantsIdFieldSelect.addEventListener("change", function () {
-            setLayerIdField("hydrants", hydrantsIdFieldSelect.value);
+        hydrantsIdFieldSelect.addEventListener("change", async function () {
+            const previousField = selectedLayerIdFields.hydrants || "";
+            try {
+                await setLayerIdField("hydrants", hydrantsIdFieldSelect.value);
+            } catch {
+                hydrantsIdFieldSelect.value = previousField;
+            }
         });
     }
 
@@ -2384,6 +2459,12 @@ async function downloadProjectZip() {
     }
 
     try {
+        if (!await saveSequencesToServer()) {
+            throw new Error(
+                "Could not save the latest operation options before exporting the project."
+            );
+        }
+
         const response = await fetch("/download_project", {
             method: "GET"
         });
@@ -2471,6 +2552,7 @@ async function uploadProjectZip() {
             populateLayerFieldSelect("hydrants", data.hydrants.fields || [], data.hydrants.selected_id_field || "");
             hydrantsLoaded = true;
         } else {
+            populateLayerFieldSelect("hydrants", [], "");
             hydrantsLoaded = false;
         }
 
@@ -2486,6 +2568,7 @@ async function uploadProjectZip() {
         if (data.sequences) {
             renderSequences(data.sequences, data.message || "Project loaded successfully.");
             window.lastWaterNetworkResults = data.results_dict || {};
+            updateOperationWarningIndicators();
             setSequencePlaybackResults(data.sequences, data.results_dict || {});
         }
         if (data.options && window.setUsedOptions) {
@@ -2583,42 +2666,47 @@ async function uploadPointShapefile(layerType) {
 }
 
 function populateLayerFieldSelect(layerType, fieldNames, selectedField) {
+    layerIdFieldNames[layerType] = Array.isArray(fieldNames) ? fieldNames : [];
     selectedLayerIdFields[layerType] = selectedField || null;
-    const select = document.getElementById(`${layerType}IdFieldSelect`);
+    const selector = document.getElementById(`${layerType}IdFieldSelect`);
+    const hasFields = layerIdFieldNames[layerType].length > 0;
+    if (selector) {
+        selector.replaceChildren();
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = hasFields
+            ? "Select ID field"
+            : `Load ${layerType} to select an ID field`;
+        placeholder.disabled = true;
+        placeholder.selected = !selectedField;
+        selector.appendChild(placeholder);
+
+        (hasFields ? layerIdFieldNames[layerType] : []).forEach((fieldName) => {
+            const option = document.createElement("option");
+            option.value = fieldName;
+            option.textContent = fieldName;
+            selector.appendChild(option);
+        });
+
+        if (selectedField && layerIdFieldNames[layerType].includes(selectedField)) {
+            selector.value = selectedField;
+        }
+        selector.disabled = !hasFields;
+    }
+
     const container = document.getElementById(`${layerType}FieldSelector`);
-
-    if (!select || !container) {
-        refreshPointLayerPopups(layerType);
-        return;
+    if (container) {
+        container.style.display = hasFields ? "block" : "none";
     }
-
-    select.innerHTML = "";
-
-    if (!fieldNames || !fieldNames.length) {
-        container.style.display = "none";
-        refreshPointLayerPopups(layerType);
-        return;
+    const status = document.getElementById(`${layerType}IdFieldStatus`);
+    if (status) {
+        status.textContent = selectedField
+            ? `Using ${selectedField}.`
+            : hasFields
+                ? "Select the field containing the feature IDs."
+                : "";
+        status.classList.remove("error");
     }
-
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = "Select ID field";
-    placeholder.disabled = true;
-    placeholder.selected = !selectedField;
-    select.appendChild(placeholder);
-
-    fieldNames.forEach(function (fieldName) {
-        const option = document.createElement("option");
-        option.value = fieldName;
-        option.textContent = fieldName;
-        select.appendChild(option);
-    });
-
-    if (selectedField && fieldNames.includes(selectedField)) {
-        select.value = selectedField;
-    }
-
-    container.style.display = "block";
     refreshPointLayerPopups(layerType);
 }
 
@@ -2653,11 +2741,25 @@ async function setLayerIdField(layerType, idField) {
         }
 
         selectedLayerIdFields[layerType] = data.selected_id_field || idField;
+        const optionsSelect = document.getElementById(`${layerType}IdFieldSelect`);
+        if (optionsSelect) {
+            optionsSelect.value = selectedLayerIdFields[layerType];
+        }
         refreshPointLayerPopups(layerType);
         setLayerStatus(layerType, `ID field set to ${data.selected_id_field}.`, false);
+        const optionsStatus = document.getElementById(`${layerType}IdFieldStatus`);
+        if (optionsStatus) {
+            optionsStatus.textContent = `Using ${data.selected_id_field}.`;
+            optionsStatus.classList.remove("error");
+        }
     } catch (error) {
         console.error(error);
         setLayerStatus(layerType, error.message, true);
+        const optionsStatus = document.getElementById(`${layerType}IdFieldStatus`);
+        if (optionsStatus) {
+            optionsStatus.textContent = error.message;
+            optionsStatus.classList.add("error");
+        }
         throw error;
     }
 }
@@ -2922,7 +3024,6 @@ function buildPipePopupHtml(props, flushMetrics) {
     if (flushMetrics) {
         popupHtml += `<br>Flush velocity: ${formatPopupNumber(flushMetrics.velocity) || "N/A"} ft/s`
             + `<br>Flush flow: ${formatPopupNumber(flushMetrics.flow) || "N/A"} gpm`
-            + `<br>Velocity ratio: ${escapePopupHtml(formatPopupNumber(flushMetrics.velocityRatio) || "N/A")}`;
     }
     return popupHtml;
 }
@@ -3140,6 +3241,7 @@ function renderSequences(sequences, message) {
         (sequence.operations || []).forEach((operation, operationIndex) => {
             const operationSection = document.createElement("div");
             operationSection.className = "sequence-operation";
+            operationSection.dataset.sequenceIndex = index;
             operationSection.dataset.operationIndex = operationIndex;
             operationSection.setAttribute('draggable', 'true');
             operationSection.addEventListener('dragstart', function (event) {
@@ -3310,8 +3412,98 @@ function renderSequences(sequences, message) {
     });
 
     selectSequenceTab(activeSequenceIndex);
+    updateOperationWarningIndicators();
     saveSequencesToServer();
     setSequenceStatus(message || `Loaded ${currentSequences.length} sequence${currentSequences.length === 1 ? "" : "s"}.`, false);
+}
+
+function updateOperationWarningIndicators() {
+    document.querySelectorAll(".sequence-operation").forEach((operationSection) => {
+        const sequenceIndex = Number(operationSection.dataset.sequenceIndex);
+        const operationIndex = Number(operationSection.dataset.operationIndex);
+        const sequence = currentSequences[sequenceIndex];
+        const operation = sequence?.operations?.[operationIndex];
+        const titleGroup = operationSection.querySelector(
+            ".sequence-operation-title-group"
+        );
+        if (!sequence || !operation || !titleGroup) {
+            return;
+        }
+
+        const operationName = operation.name || `Operation ${operationIndex + 1}`;
+        const sequenceResults =
+            (window.lastWaterNetworkResults || {})[sequence.name] || {};
+        const operationResult = sequenceResults[operationName] || {};
+        const warnings = operationResult.warnings;
+        let warningButton = titleGroup.querySelector(
+            ".sequence-operation-warning"
+        );
+
+        if (!Array.isArray(warnings) || warnings.length === 0) {
+            warningButton?.remove();
+            return;
+        }
+        if (warningButton) {
+            return;
+        }
+
+        warningButton = document.createElement("button");
+        warningButton.type = "button";
+        warningButton.className =
+            "sequence-operation-warning";
+        warningButton.textContent = "⚠";
+        warningButton.title = "View operation warnings";
+        warningButton.setAttribute("aria-label", "View operation warnings");
+        warningButton.addEventListener("click", function (event) {
+            event.stopPropagation();
+            const latestResults =
+                (window.lastWaterNetworkResults || {})[sequence.name] || {};
+            const latestWarnings = latestResults[operationName]?.warnings;
+            if (Array.isArray(latestWarnings) && latestWarnings.length > 0) {
+                showOperationWarnings(
+                    sequence.name,
+                    operationName,
+                    latestWarnings
+                );
+            }
+        });
+        titleGroup.appendChild(warningButton);
+    });
+}
+
+function showOperationWarnings(sequenceName, operationName, warnings) {
+    const modal = document.getElementById("operationWarningsModal");
+    const title = document.getElementById("operationWarningsTitle");
+    const list = document.getElementById("operationWarningsList");
+    if (!modal || !title || !list) {
+        setSequenceStatus("The operation warnings dialog is not available.", true);
+        return;
+    }
+
+    title.textContent = `${operationName} warnings (${sequenceName})`;
+    list.replaceChildren();
+    warnings.forEach((warning) => {
+        const item = document.createElement("li");
+        item.textContent = typeof warning === "string"
+            ? warning
+            : warning.summary || warning.check || "An operation check failed.";
+        list.appendChild(item);
+    });
+    modal.classList.remove("hidden");
+}
+
+function initializeOperationWarningsDialog() {
+    const modal = document.getElementById("operationWarningsModal");
+    const closeButton = document.getElementById("closeOperationWarningsModal");
+    const doneButton = document.getElementById("dismissOperationWarningsModal");
+    const closeModal = () => modal?.classList.add("hidden");
+    closeButton?.addEventListener("click", closeModal);
+    doneButton?.addEventListener("click", closeModal);
+    modal?.addEventListener("click", (event) => {
+        if (event.target === modal) {
+            closeModal();
+        }
+    });
 }
 
 function parseSequenceFile(fileName, text) {

@@ -130,6 +130,8 @@ body {
     box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
     padding: 24px;
     position: relative;
+    max-height: 80vh;
+    overflow-y: auto;
 }
 
 .modal-close {
@@ -924,7 +926,7 @@ select:focus-visible {
 .sequence-name-label,
 .sequence-operation-name-label {
     flex: 1;
-    min-width: 0;
+    min-width: 50%;
     padding: 8px 12px;
     font-size: 12px;
     background: #ffffff;
@@ -961,6 +963,31 @@ select:focus-visible {
 
 .sequence-edit-button:hover {
     background: #dde7f1;
+}
+
+.sequence-operation-warning {
+    background: none;
+    border: none;
+    color: #ff0303;
+    font-size: 17px;
+    position: absolute;
+    top: 0;
+    right: 0;
+}
+
+.sequence-operation-warning:hover {
+    color:#00970d;
+}
+
+.operation-warning-list {
+    margin: 12px 0 0;
+    padding-left: 22px;
+    color: #26303b;
+    line-height: 1.5;
+}
+
+.operation-warning-list li + li {
+    margin-top: 8px;
 }
 
 .sequence-edit-button:disabled,
@@ -1016,6 +1043,7 @@ select:focus-visible {
 .sequence-item .sequence-operation {
     margin: 0;
     display: block;
+    position: relative;
 }
 
 .sequence-operation-header {

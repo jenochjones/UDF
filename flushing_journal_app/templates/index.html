@@ -37,6 +37,7 @@
             </div>
 
             <div class="toolbar-section toolbar-section-options hidden" data-toolbar="options">
+                               
                 <div class="toolbar-section-heading">
                     <span class="toolbar-section-kicker">Model Defaults</span>
                 </div>
@@ -44,7 +45,7 @@
                     <div class="option-readout"><span class="toolbar-label">Model timestep</span><output id="modelTimestepValue" class="toolbar-value">0 hour</output></div>
                     <div class="option-readout"><span class="toolbar-label">Lateral diameter</span><output id="lateralDiamValue" class="toolbar-value">5.99 in</output></div>
                     <div class="option-readout"><span class="toolbar-label">Lateral roughness</span><output id="lateralRoughnessValue" class="toolbar-value">1.0</output></div>
-                    <div class="option-readout"><span class="toolbar-label">Hydrant search distance</span><output id="searchDistValue" class="toolbar-value">120 ft</output></div>
+                    <!--<div class="option-readout"><span class="toolbar-label">Hydrant search distance</span><output id="searchDistValue" class="toolbar-value">120 ft</output></div>-->
                     
                     <div class="toolbar-spacer"></div>
                     
@@ -63,6 +64,8 @@
                     <input id="minFlushVelInput" class="toolbar-input" type="number" min="0.01" step="any" value="5.0" required />
                     <label class="toolbar-label" for="volumeTurnoversInput">Volume turnovers</label>
                     <input id="volumeTurnoversInput" class="toolbar-input" type="number" min="0.01" step="any" value="3.0" required />
+                    <label class="toolbar-label" for="pipesToReflushInput">Pipes to Reflush</label>
+                    <input id="pipesToReflushInput" class="toolbar-input" type="number" min="0" step="1" value="1" required />
                 </div>
 
                 <div class="toolbar-section-heading">
@@ -71,14 +74,30 @@
                 <div class="toolbar-upload-block toolbar-layer-block">
                     <label class="toolbar-label" for="minResPresInput">Min residual pressure (psi)</label>
                     <input id="minResPresInput" class="toolbar-input" type="number" min="0" step="0.1" value="20" required />
-                    <label class="toolbar-label" for="presDropWarningLimitInput">Pressure drop warning limit (psi)</label>
-                    <input id="presDropWarningLimitInput" class="toolbar-input" type="number" min="0" step="0.1" value="10.0" required />
+                    <!--<label class="toolbar-label" for="presDropWarningLimitInput">Pressure drop warning limit (psi)</label>-->
+                    <!--<input id="presDropWarningLimitInput" class="toolbar-input" type="number" min="0" step="0.1" value="50.0" required />-->
                     <label class="toolbar-label" for="maxFlushVelInput">Max flush velocity (fps)</label>
                     <input id="maxFlushVelInput" class="toolbar-input" type="number" min="0" step="0.1" value="10.0" required />
                     <label class="toolbar-label" for="maxFlushLengthInput">Max flush length (ft)</label>
                     <input id="maxFlushLengthInput" class="toolbar-input" type="number" min="0" step="1" value="5280" required />
                     <label class="toolbar-label" for="maxFlushDiamInput">Max flush diameter (in)</label>
                     <input id="maxFlushDiamInput" class="toolbar-input" type="number" min="0" step="0.1" value="20.0" required />
+                </div>
+
+                <div class="toolbar-section-heading">
+                    <span class="toolbar-section-kicker">GIS ID Fields</span>
+                </div>
+                <div class="toolbar-upload-block toolbar-layer-block">
+                    <label class="toolbar-label" for="hydrantsIdFieldSelect">Hydrant ID field</label>
+                    <select id="hydrantsIdFieldSelect" class="toolbar-input" disabled>
+                        <option value="">Load hydrants to select an ID field</option>
+                    </select>
+                    <!--<div id="hydrantsIdFieldStatus" class="toolbar-status" aria-live="polite"></div>-->
+                    <label class="toolbar-label" for="valvesIdFieldSelect">Valve ID field</label>
+                    <select id="valvesIdFieldSelect" class="toolbar-input" disabled>
+                        <option value="">Load valves to select an ID field</option>
+                    </select>
+                    <!--<div id="valvesIdFieldStatus" class="toolbar-status" aria-live="polite"></div>-->
                 </div>
 
                 <div class="toolbar-spacer"></div>
@@ -361,10 +380,24 @@
             <input id="operationMinFlushVelocityInput" class="modal-input" type="number" min="0.01" step="any" placeholder="Use project default" />
             <label class="modal-label" for="operationVolumeTurnoversInput">Volume turnovers</label>
             <input id="operationVolumeTurnoversInput" class="modal-input" type="number" min="0.01" step="any" placeholder="Use project default" />
+            <label class="modal-label" for="operationPipesToReflushInput">Pipes to Reflush</label>
+            <input id="operationPipesToReflushInput" class="modal-input" type="number" min="0" step="1" placeholder="Use project default (1)" />
             <div id="operationOptionsError" class="modal-error" aria-live="polite"></div>
             <div class="modal-actions">
                 <button id="cancelOperationOptionsModal" class="modal-button secondary" type="button">Cancel</button>
                 <button id="saveOperationOptionsModal" class="modal-button primary" type="button">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="operationWarningsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="operationWarningsTitle">
+        <div class="modal-card">
+            <button id="closeOperationWarningsModal" class="modal-close" type="button" aria-label="Close">×</button>
+            <h3 id="operationWarningsTitle">Operation warnings</h3>
+            <p class="modal-copy">The following flushing checks exceeded their configured limits.</p>
+            <ul id="operationWarningsList" class="operation-warning-list"></ul>
+            <div class="modal-actions">
+                <button id="dismissOperationWarningsModal" class="modal-button primary" type="button">Close</button>
             </div>
         </div>
     </div>
