@@ -1,4 +1,4 @@
-  Page 1                                    Mon Oct 12 16:28:35 2026
+  Page 1                                    Fri Oct 16 07:32:37 2026
 
   ******************************************************************
   *                           E P A N E T                          *
@@ -7,29 +7,24 @@
   *                         Version 2.2                            *
   ******************************************************************
   
-  Analysis begun Mon Oct 12 16:28:35 2026
+  Analysis begun Fri Oct 16 07:32:37 2026
 
    
   Hydraulic Status:
   -----------------------------------------------------------------------
      0:00:00: Balancing the network:
 
-              Trial  1: relative flow change = 1.159120
-              Trial  2: relative flow change = 0.710217
-              PRV PRV_Z2-Z1_400N switched from active to open
-              Trial  3: relative flow change = 0.487155
-              PRV PRV_Z2-Z1_400N switched from open to active
-              Trial  4: relative flow change = 0.165286
-              PRV PRV_Z2-Z1_400N switched from active to open
-              Trial  5: relative flow change = 0.148305
-              Trial  6: relative flow change = 0.084703
-              Trial  7: relative flow change = 0.013754
-              Trial  8: relative flow change = 0.005274
-              Trial  9: relative flow change = 0.000080
-                        maximum  flow change = 1.9013 for Link P3103
-                        maximum  head error  = 0.0000 for Link P1121
+              Trial  1: relative flow change = 1.518776
+              Trial  2: relative flow change = 0.418628
+              Trial  3: relative flow change = 0.234039
+              Trial  4: relative flow change = 0.071751
+              Trial  5: relative flow change = 0.011264
+              Trial  6: relative flow change = 0.001482
+              Trial  7: relative flow change = 0.000051
+                        maximum  flow change = 0.9671 for Link PRV_MAPLE-Z2_LOWERTANK
+                        maximum  head error  = 0.0000 for Link P2765
 
-     0:00:00: Balanced after 9 trials
+     0:00:00: Balanced after 7 trials
      0:00:00: Reservoir RES_SEALWELL is emptying
      0:00:00: Reservoir RES_CARNESECCAWELL is emptying
      0:00:00: Reservoir RES_WESTWOODWELL is emptying
@@ -39,9 +34,8 @@
      0:00:00: Tank T1_MAPLE1 is emptying at 16.05 ft
      0:00:00: Tank T2_MAPLE2 is emptying at 16.05 ft
      0:00:00: Tank T4_WESTWOOD is closed at 15.00 ft
-     0:00:00: Tank T5_CROWD is emptying at 18.24 ft
-     0:00:00: PRV PRV_Z2-Z1_400N open
+     0:00:00: Tank T5_CROWD is filling at 18.24 ft
    
   WARNING: Negative pressures at 0:00:00 hrs.
    
-  Analysis ended Mon Oct 12 16:28:35 2026
+  Analysis ended Fri Oct 16 07:32:37 2026

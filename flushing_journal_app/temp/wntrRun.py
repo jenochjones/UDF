@@ -5,9 +5,6 @@ Created on Sun Oct 11 08:51:27 2026
 
 @author: jonjones
 """
-import wntr
-
-
 
 """
 Run the water network model using the provided model store.
@@ -345,8 +342,6 @@ namespace = {}; exec(open('./my_dict.txt').read(), namespace); mapping = namespa
 
 
 import math
-from collections import deque
-
 import wntr
 
 
@@ -376,54 +371,75 @@ def _get_result_row(results, result_name, timestep=None):
     return result_df.loc[nearest_index].copy()
 
 
-def _get_upstream_pipe_candidates(wn, current_node_id, flowrate_m3s):
-    """
-    Find pipes that hydraulically deliver flow into current_node_id.
+def trace_flushing_path(wn, starting_node_name, base_velocity, flushing_velocity, already_flushed, velocity_limit_fps, velocity_multiplier):
+    velocity_limit_mps = velocity_limit_fps / M_TO_FT
 
-    WNTR/EPANET flow sign convention:
-        Positive flow: start_node -> end_node
-        Negative flow: end_node -> start_node
+    pipe_adjacency = {}
 
-    Returns:
-        list of tuples:
-            (pipe_id, upstream_node_id, absolute_flow_m3s)
-    """
-    candidates = []
+    for pipe_name, pipe in wn.pipes():
+        start_node = pipe.start_node_name
+        end_node = pipe.end_node_name
 
-    for link_id in wn.get_links_for_node(current_node_id):
-        link = wn.get_link(link_id)
+        pipe_adjacency.setdefault(start_node, []).append(
+            (pipe_name, end_node)
+        )
+        pipe_adjacency.setdefault(end_node, []).append(
+            (pipe_name, start_node)
+        )
 
-        # The flushing calculations requested here are pipe-specific.
-        if not isinstance(link, wntr.network.elements.Pipe):
+    qualifying_pipes = []
+    visited_pipes = set()
+    visited_nodes = set()
+
+    # Depth-first search beginning at the specified node.
+    nodes_to_visit = [starting_node_name]
+
+    while nodes_to_visit:
+        current_node = nodes_to_visit.pop()
+
+        if current_node in visited_nodes:
             continue
 
-        if link_id not in flowrate_m3s.index:
-            continue
+        visited_nodes.add(current_node)
 
-        flow = float(flowrate_m3s.loc[link_id])
+        for pipe_name, other_node_name in pipe_adjacency.get(
+            current_node, []
+        ):
+            if pipe_name in visited_pipes:
+                continue
 
-        # Positive flow enters the current node when current node is the
-        # pipe's end node.
-        if flow > 0.0 and link.end_node_name == current_node_id:
-            candidates.append(
-                (link_id, link.start_node_name, abs(flow))
-            )
+            visited_pipes.add(pipe_name)
 
-        # Negative flow enters the current node when current node is the
-        # pipe's start node.
-        elif flow < 0.0 and link.start_node_name == current_node_id:
-            candidates.append(
-                (link_id, link.end_node_name, abs(flow))
-            )
+            pipe_velocity = flushing_velocity.get(pipe_name)
+            base_pipe_velocity = base_velocity.get(pipe_name)
 
-    # Follow the highest-flow branch first. This also makes output ordering
-    # repeatable when more than one pipe supplies a junction.
-    candidates.sort(key=lambda item: item[2], reverse=True)
+            # Skip pipes without simulation velocity results.
+            if pipe_velocity is None:
+                continue
+            
+            if base_pipe_velocity is None:
+                continue
+            
+            if base_pipe_velocity == 0:
+                flush_ratio = float('inf')
+            else:
+                flush_ratio = pipe_velocity / base_pipe_velocity
+            
+            is_flushed = (pipe_velocity > velocity_limit_mps and flush_ratio > velocity_multiplier and pipe_name not in already_flushed)
 
-    return candidates
+            if is_flushed:
+                qualifying_pipes.append(pipe_name)
+                already_flushed.add(pipe_name)
+
+                # Only continue through the network when the pipe exceeds
+                # the velocity limit.
+                if other_node_name not in visited_nodes:
+                    nodes_to_visit.append(other_node_name)
+
+    return qualifying_pipes
 
 
-def trace_flushed_pipes(
+def get_flushing_results(
         wn,
         base_results,
         flush_results,
@@ -434,58 +450,27 @@ def trace_flushed_pipes(
         velocity_multiplier=3.0,
         minimum_flush_velocity_fps=5.0,
         timestep=None):
-    """
-    Trace flow upstream from one or more hydrant nodes.
 
-    A pipe is recorded when:
+    
+    operation_results = {
+        "sequence_name": sequence_name,
+        "operation_name": operation_name,
+        "hydrant_nodes": list(hydrant_node_ids),
 
-        absolute flush velocity >= velocity_multiplier
-                                   * absolute base velocity
+        "flushed_pipes": [],
+        "flushed_pipe_velocity_fps": [],
+        "base_pipe_velocity_fps": [],
+        "flush_pipe_flow_gpm": [],
 
-    Tracing along a branch stops when:
-        1. The pipe fails the velocity criterion.
-        2. The pipe is already in already_flushed.
-        3. The pipe has already been encountered during this operation.
-        4. No pipe hydraulically delivers flow to the current node.
-
-    Parameters
-    ----------
-    wn : wntr.network.WaterNetworkModel
-        Network used for the flush simulation.
-
-    base_results : wntr.sim.results.SimulationResults
-        Results from the unmodified/base model.
-
-    flush_results : wntr.sim.results.SimulationResults
-        Results from the flushing operation.
-
-    sequence_name : str
-        Flushing sequence name.
-
-    operation_name : str
-        Flushing operation name.
-
-    hydrant_node_ids : list[str]
-        Model junction IDs associated with the open hydrants.
-
-    already_flushed : set[str] or list[str], optional
-        Pipes flushed by previous operations. The supplied set is updated
-        in place. If a list is supplied, a new set is created.
-
-    velocity_multiplier : float, optional
-        Required ratio between flush and base velocity. Default is 3.0.
-
-    timestep : int or float, optional
-        Simulation time in seconds. If omitted, final results are used.
-
-    Returns
-    -------
-    tuple
-        operation_results, already_flushed
-
-        operation_results is a dictionary containing lists of pipe IDs,
-        velocities, flows, dimensions, volumes, and flushing times.
-    """
+        "pipe_diameter_in": [],
+        "pipe_length_ft": [],
+        "pipe_volume_gal": [],
+        "velocity_ratio": [],
+        
+        "total_flush_volume_gal": None,
+        "total_flush_time_min": None,
+    }
+    
     if already_flushed is None:
         already_flushed = set()
     elif not isinstance(already_flushed, set):
@@ -508,34 +493,13 @@ def trace_flushed_pipes(
         "flowrate",
         timestep
     )
-
-    operation_results = {
-        "sequence_name": sequence_name,
-        "operation_name": operation_name,
-        "hydrant_nodes": list(hydrant_node_ids),
-
-        "flushed_pipes": [],
-        "flushed_pipe_velocity_fps": [],
-        "base_pipe_velocity_fps": [],
-        "flush_pipe_flow_gpm": [],
-
-        "pipe_diameter_in": [],
-        "pipe_length_ft": [],
-        "pipe_volume_gal": [],
-        "three_pipe_volumes_gal": [],
-        "flush_time_min": [],
-
-        # Helpful fields for reviewing branches and stopping conditions.
-        "source_hydrant_node": [],
-        "upstream_node": [],
-        "velocity_ratio": [],
-        "trace_stops": [],
-    }
-
-    # One queue item represents one active upstream branch.
-    trace_queue = deque()
-
+    
+    flushed_pipes = []
+    
     for hydrant_node_id in hydrant_node_ids:
+        print(f'Sequence: {sequence_name}')
+        print(f'Operation: {operation_name}')
+        print(f'Hydrant: {hydrant_node_id}')
         if hydrant_node_id not in wn.node_name_list:
             operation_results["trace_stops"].append({
                 "hydrant_node": hydrant_node_id,
@@ -544,166 +508,70 @@ def trace_flushed_pipes(
                 "reason": "Hydrant node not found in model",
             })
             continue
-
-        trace_queue.append((hydrant_node_id, hydrant_node_id))
-
-    # Prevent loops and duplicate records within this operation.
-    visited_pipes = set()
-
-    while trace_queue:
-        current_node_id, source_hydrant_id = trace_queue.popleft()
-
-        upstream_candidates = _get_upstream_pipe_candidates(
-            wn=wn,
-            current_node_id=current_node_id,
-            flowrate_m3s=flush_flowrate_m3s
-        )
-
-        if not upstream_candidates:
-            operation_results["trace_stops"].append({
-                "hydrant_node": source_hydrant_id,
-                "node": current_node_id,
-                "pipe": None,
-                "reason": "No upstream pipe with flow entering node",
-            })
-            continue
-
-        for pipe_id, upstream_node_id, absolute_flow_m3s in upstream_candidates:
-
-            if pipe_id in already_flushed:
-                operation_results["trace_stops"].append({
-                    "hydrant_node": source_hydrant_id,
-                    "node": current_node_id,
-                    "pipe": pipe_id,
-                    "reason": "Pipe is in already_flushed",
-                })
-                continue
-
-            if pipe_id in visited_pipes:
-                operation_results["trace_stops"].append({
-                    "hydrant_node": source_hydrant_id,
-                    "node": current_node_id,
-                    "pipe": pipe_id,
-                    "reason": "Pipe already visited in this operation",
-                })
-                continue
-
-            visited_pipes.add(pipe_id)
-
-            if pipe_id not in flush_velocity_mps.index:
-                operation_results["trace_stops"].append({
-                    "hydrant_node": source_hydrant_id,
-                    "node": current_node_id,
-                    "pipe": pipe_id,
-                    "reason": "Flush velocity result is unavailable",
-                })
-                continue
-
-            if pipe_id not in base_velocity_mps.index:
-                operation_results["trace_stops"].append({
-                    "hydrant_node": source_hydrant_id,
-                    "node": current_node_id,
-                    "pipe": pipe_id,
-                    "reason": "Base velocity result is unavailable",
-                })
-                continue
-
-            flush_velocity = abs(float(flush_velocity_mps.loc[pipe_id]))
-            base_velocity = abs(float(base_velocity_mps.loc[pipe_id]))
+        
+        flushed_pipes = trace_flushing_path(wn, hydrant_node_id, base_velocity_mps, flush_velocity_mps, already_flushed, minimum_flush_velocity_fps, velocity_multiplier)
+        
+        if len(flushed_pipes) > 0:
+            for pipe_id in flushed_pipes:
+                flush_velocity = flush_velocity_mps.get(pipe_id) * M_TO_FT
+                base_velocity = base_velocity_mps.get(pipe_id) * M_TO_FT
+                flow_gpm = flush_flowrate_m3s.get(pipe_id) * M3S_TO_GPM
+                
+                pipe = wn.get_link(pipe_id)
+    
+                diameter_m = float(pipe.diameter)
+                length_m = float(pipe.length)
+    
+                # Internal pipe volume based on the modeled inside diameter.
+                cross_section_area_m2 = (
+                    math.pi * diameter_m ** 2 / 4.0
+                )
+                pipe_volume_m3 = cross_section_area_m2 * length_m
+    
+                pipe_volume_gal = pipe_volume_m3 * M3_TO_GAL
+    
+                if base_velocity > 0.0:
+                    velocity_ratio = flush_velocity / base_velocity
+                elif flush_velocity > 0.0:
+                    velocity_ratio = float("inf")
+                else:
+                    velocity_ratio = None
+    
+                operation_results["flushed_pipes"].append(pipe_id)
+                operation_results["flushed_pipe_velocity_fps"].append(
+                    flush_velocity * M_TO_FT
+                )
+                operation_results["base_pipe_velocity_fps"].append(
+                    base_velocity * M_TO_FT
+                )
+                operation_results["flush_pipe_flow_gpm"].append(abs(flow_gpm))
+    
+                operation_results["pipe_diameter_in"].append(
+                    round(diameter_m * M_TO_IN, 1)
+                )
+                operation_results["pipe_length_ft"].append(
+                    round(length_m * M_TO_FT, 1)
+                )
+                operation_results["pipe_volume_gal"].append(
+                    round(pipe_volume_gal, 1)
+                )
+                operation_results["velocity_ratio"].append(
+                    str(velocity_ratio)
+                )
             
-            required_velocity = velocity_multiplier * base_velocity
-
-            meets_criterion = (
-                flush_velocity * M_TO_FT >= minimum_flush_velocity_fps
-                and flush_velocity >= required_velocity
-            )
-
-            if meets_criterion:
-                operation_results["trace_stops"].append({
-                    "hydrant_node": source_hydrant_id,
-                    "node": current_node_id,
-                    "pipe": pipe_id,
-                    "reason": "Flush velocity is below required multiple",
-                    "flush_velocity_fps":
-                        flush_velocity * M_TO_FT,
-                    "base_velocity_fps":
-                        base_velocity * M_TO_FT,
-                    "required_velocity_fps":
-                        required_velocity * M_TO_FT,
-                })
-                continue
-
-            pipe = wn.get_link(pipe_id)
-
-            diameter_m = float(pipe.diameter)
-            length_m = float(pipe.length)
-
-            # Internal pipe volume based on the modeled inside diameter.
-            cross_section_area_m2 = (
-                math.pi * diameter_m ** 2 / 4.0
-            )
-            pipe_volume_m3 = cross_section_area_m2 * length_m
-
-            pipe_volume_gal = pipe_volume_m3 * M3_TO_GAL
-            three_pipe_volumes_gal = 3.0 * pipe_volume_gal
-            flow_gpm = absolute_flow_m3s * M3S_TO_GPM
-
-            if flow_gpm > 0.0:
-                flush_time_min = three_pipe_volumes_gal / flow_gpm
-            else:
-                flush_time_min = None
-
-            if base_velocity > 0.0:
-                velocity_ratio = flush_velocity / base_velocity
-            elif flush_velocity > 0.0:
-                velocity_ratio = float("inf")
-            else:
-                velocity_ratio = None
-
-            operation_results["flushed_pipes"].append(pipe_id)
-            operation_results["flushed_pipe_velocity_fps"].append(
-                flush_velocity * M_TO_FT
-            )
-            operation_results["base_pipe_velocity_fps"].append(
-                base_velocity * M_TO_FT
-            )
-            operation_results["flush_pipe_flow_gpm"].append(flow_gpm)
-
-            operation_results["pipe_diameter_in"].append(
-                diameter_m * M_TO_IN
-            )
-            operation_results["pipe_length_ft"].append(
-                length_m * M_TO_FT
-            )
-            operation_results["pipe_volume_gal"].append(
-                pipe_volume_gal
-            )
-            operation_results["three_pipe_volumes_gal"].append(
-                three_pipe_volumes_gal
-            )
-            operation_results["flush_time_min"].append(
-                flush_time_min
-            )
-
-            operation_results["source_hydrant_node"].append(
-                source_hydrant_id
-            )
-            operation_results["upstream_node"].append(
-                upstream_node_id
-            )
-            operation_results["velocity_ratio"].append(
-                velocity_ratio
-            )
-
-            already_flushed.add(pipe_id)
-
-            # Continue tracing from the upstream end of this pipe.
-            trace_queue.append(
-                (upstream_node_id, source_hydrant_id)
-            )
+            
+            pipe_volumes = sum(operation_results['pipe_volume_gal'])
+    
+            flush_flowrate = sum(operation_results["flush_pipe_flow_gpm"]) / len(operation_results["flush_pipe_flow_gpm"])
+            
+            flush_volume = pipe_volumes * 3
+            
+            flush_time = flush_volume / flush_flowrate
+            
+            operation_results['total_flush_time_min'] = round(flush_time, 2)
+            operation_results['total_flush_volume_gal'] = round(flush_volume, 1)
 
     return operation_results, already_flushed
-
 
 
 results_dict = {}
@@ -720,7 +588,6 @@ base_velocity.columns = ['velocity']
 for sequence in sequences:
     seq_wn = wntr.network.WaterNetworkModel(inp_file)
 
-    print(f"[DEBUG] Processing sequence: {sequence['name']}")
     results_dict[sequence["name"]] = {}
     for operation in sequence["operations"]:
 
@@ -731,10 +598,6 @@ for sequence in sequences:
         valves_to_close = operation.get("close_valves", []) or []
         valves_to_open = operation.get("open_valves", []) or []
         hydrants_to_open = operation.get("open_hydrants", []) or []
-        
-        print(f'Opening: {valves_to_open}')
-        print(f'Closing: {valves_to_close}')
-        print(f'Flushing: {hydrants_to_open}')
 
         orifice_size = orifice_size = float(operation.get("orifice_size") or 2.5)
 
@@ -776,7 +639,7 @@ for sequence in sequences:
                     mapping["hydrants"][hydrant_id]
                 )
         
-            operation_results, already_flushed = trace_flushed_pipes(
+            operation_results, already_flushed = get_flushing_results(
                 wn=seq_wn,
                 base_results=base_results,
                 flush_results=seq_results,
@@ -792,16 +655,9 @@ for sequence in sequences:
                 operation_results
             )
         
-            print(
-                "[DEBUG] Flushed pipes:",
-                operation_results["flushed_pipes"]
-            )
-            
-            
-            
             for hydrant in hydrants_to_open:
                 if hydrant in mapping["hydrants"]:
                     junct_id = mapping['hydrants'][hydrant]
                     junct = seq_wn.get_node(junct_id)
-                    junct.emitter_coefficient = emitter_coefficient
+                    junct.emitter_coefficient = 0
     

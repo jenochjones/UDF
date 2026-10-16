@@ -16,9 +16,10 @@ import pickle
 import zipfile
 from operator import index as index_value
 from shapely.geometry import shape, Point, LineString
+from shapely.ops import transform as transform_geometry
 from shapely.strtree import STRtree
 
-from model import run_water_network_model
+from model import build_steady_state_from_timestep, run_water_network_model
 
 app = Flask(__name__)
 
@@ -36,6 +37,9 @@ MODEL_STORE = {
     "wn": None,
     "running_model": None,
     "inp_path": None,
+    "model_dir": None,
+    "generated_inp_files": [],
+    "results_path": None,
     "rpt_path": None,
     "bin_path": None,
     "model_crs": None,
@@ -44,12 +48,27 @@ MODEL_STORE = {
     "uploaded_layers": {"valves": None, "hydrants": None},
     "element_mapping": {"valves": {}, "hydrants": {}},
     "sequences": [],
+    "results_dict": {},
     "snapshots": {},
+    "connection_options": {
+        "lateral_diameter_in": 5.99,
+        "lateral_roughness": 1.0,
+        "search_distance_ft": 120.0,
+    },
+    "valve_snap_distance_ft": 120.0,
+    "flush_options": {
+        "model_timestep": 0,
+        "default_orifice_diam": 2.5,
+        "volume_turnovers": 3.0,
+        "min_flush_vel": 5.0,
+        "start_vel_to_flushing_vel_ratio": 3.0,
+    },
 }
 
 OPERATION_PROGRESS = {
     "hydrants": {"percent": 0, "message": "Waiting to start…", "done": True},
     "valves": {"percent": 0, "message": "Waiting to start…", "done": True},
+    "sequences": {"percent": 0, "message": "Waiting to start…", "done": True},
 }
 
 
@@ -139,15 +158,16 @@ def upload_model():
                 400,
             )
 
-        inp_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-        inp_file.save(inp_path)
+        project_dir = tempfile.mkdtemp(
+            prefix="flushing_journal_project_",
+            dir=app.config["UPLOAD_FOLDER"],
+        )
+        source_inp_path = os.path.join(
+            app.config["UPLOAD_FOLDER"], f"upload_{uuid.uuid4().hex}_{filename}"
+        )
+        inp_file.save(source_inp_path)
+        base_model_path = os.path.join(project_dir, "BaseModel.inp")
 
-        # Load the EPANET model into WNTR and store it for later use.
-        wn = wntr.network.WaterNetworkModel(inp_path)
-
-        pipe_geojson = water_network_pipes_to_geojson(wn=wn, model_crs=model_crs)
-
-        # If a model_timestep was supplied, attempt to run the simulation up to that hour
         model_timestep = 0.0
         try:
             mt_str = request.form.get("model_timestep", "").strip()
@@ -156,68 +176,58 @@ def upload_model():
         except Exception:
             model_timestep = 0.0
 
-        snapshot_saved = False
-        snapshot_id = None
-        snapshot_message = None
+        try:
+            wn = build_steady_state_from_timestep(
+                source_inp_path,
+                model_timestep,
+                out_inp_path=base_model_path,
+            )
+        finally:
+            if os.path.exists(source_inp_path):
+                os.remove(source_inp_path)
 
-        if model_timestep and model_timestep > 0:
-            try:
-                # Set duration to the requested timestep (in seconds)
-                duration_seconds = int(max(0, min(23.75, model_timestep)) * 3600)
-                wn.options.time.duration = duration_seconds
-
-                # Run the simulator (WNTR pure Python simulator)
-                sim = wntr.sim.WNTRSimulator(wn)
-                results = sim.run_sim()
-
-                # Save a pickled snapshot of the model and results so it can be reused later
-                snapshot_key = f"{model_timestep:.2f}h"
-                snapshot_obj = {
-                    "model_timestep_hours": model_timestep,
-                    "wn_pickle": pickle.dumps(wn),
-                    "results_pickle": pickle.dumps(results),
-                }
-                MODEL_STORE["snapshots"][snapshot_key] = snapshot_obj
-                snapshot_saved = True
-                snapshot_id = snapshot_key
-                # Optionally write an inp file snapshot for debugging/inspection
-                try:
-                    snapshot_inp = os.path.join(
-                        app.config["UPLOAD_FOLDER"],
-                        f"{secure_filename(filename)}.snapshot_{int(model_timestep*100)}.inp",
-                    )
-                    wntr.network.write_inpfile(wn, snapshot_inp)
-                except Exception:
-                    pass
-            except Exception as run_exc:
-                snapshot_message = (
-                    f"Model run to {model_timestep} h failed: {str(run_exc)}"
-                )
-                print(traceback.format_exc())
+        pipe_geojson = water_network_pipes_to_geojson(wn=wn, model_crs=model_crs)
 
         print(f"[DEBUG] Model CRS: {model_crs}")
 
         MODEL_STORE["wn"] = wn
-        set_model_paths(inp_path)
+        set_model_paths(base_model_path)
+        MODEL_STORE["model_dir"] = project_dir
+        MODEL_STORE["generated_inp_files"] = []
+        MODEL_STORE["results_dict"] = {}
+        MODEL_STORE["results_path"] = None
         MODEL_STORE["model_crs"] = model_crs
+        MODEL_STORE["model_time"] = model_timestep
         MODEL_STORE["pipe_geojson"] = pipe_geojson
+        MODEL_STORE["connection_options"] = {
+            "lateral_diameter_in": 5.99,
+            "lateral_roughness": 1.0,
+            "search_distance_ft": 120.0,
+        }
+        MODEL_STORE["valve_snap_distance_ft"] = 120.0
+        MODEL_STORE["flush_options"] = {
+            "model_timestep": model_timestep,
+            "default_orifice_diam": 2.5,
+            "volume_turnovers": 3.0,
+            "min_flush_vel": 5.0,
+            "start_vel_to_flushing_vel_ratio": 3.0,
+        }
         response = {
             "success": True,
             "message": "Model loaded successfully.",
             "model_crs": model_crs,
+            "model_timestep": model_timestep,
+            "snapshot_message": (
+                f"Steady-state model created at {model_timestep} h."
+            ),
             "pipe_count": len(pipe_geojson.get("features", [])),
             "pipe_geojson": pipe_geojson,
+            "options": {
+                "connection_options": MODEL_STORE["connection_options"],
+                "flush_options": MODEL_STORE["flush_options"],
+                "valve_snap_distance_ft": MODEL_STORE["valve_snap_distance_ft"],
+            },
         }
-
-        if snapshot_saved:
-            response["model_timestep"] = model_timestep
-            response["snapshot_id"] = snapshot_id
-            response["snapshot_message"] = (
-                snapshot_message or f"Snapshot saved at {model_timestep} h"
-            )
-        elif snapshot_message:
-            response["model_timestep"] = model_timestep
-            response["snapshot_message"] = snapshot_message
 
         return jsonify(response)
 
@@ -264,6 +274,8 @@ def upload_project():
                 "hydrants": result["hydrants"],
                 "valves": result["valves"],
                 "sequences": result.get("sequences", []),
+                "results_dict": result.get("results_dict", {}),
+                "options": result.get("options", {}),
             }
         )
     except Exception as exc:
@@ -458,6 +470,35 @@ def connect_hydrants():
     try:
         data = request.get_json(silent=True) or {}
         modified_hydrants = data.get("hydrants") or []
+        requested_options = data.get("connection_options")
+        connection_options = dict(MODEL_STORE.get("connection_options", {}))
+        if requested_options is not None:
+            if not isinstance(requested_options, dict):
+                raise ValueError("Hydrant connection options must be an object.")
+            connection_options.update(requested_options)
+
+        try:
+            lateral_diameter_in = float(connection_options["lateral_diameter_in"])
+            lateral_roughness = float(connection_options["lateral_roughness"])
+            search_distance_ft = float(connection_options["search_distance_ft"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("Hydrant connection values must be numeric.") from exc
+        if not all(
+            math.isfinite(value)
+            for value in (lateral_diameter_in, lateral_roughness, search_distance_ft)
+        ):
+            raise ValueError("Hydrant connection values must be finite numbers.")
+        if lateral_diameter_in <= 0 or lateral_roughness <= 0 or search_distance_ft < 0:
+            raise ValueError(
+                "Lateral diameter and roughness must be greater than zero; "
+                "search distance cannot be negative."
+            )
+
+        connection_options = {
+            "lateral_diameter_in": lateral_diameter_in,
+            "lateral_roughness": lateral_roughness,
+            "search_distance_ft": search_distance_ft,
+        }
 
         if MODEL_STORE["wn"] is None:
             return (
@@ -490,6 +531,7 @@ def connect_hydrants():
 
         wn = MODEL_STORE["wn"]
         model_crs = MODEL_STORE["model_crs"]
+
         if modified_hydrants:
             hydrant_features = _filter_modified_features("hydrants", modified_hydrants)
         else:
@@ -506,6 +548,17 @@ def connect_hydrants():
             return crs_text
 
         model_crs = normalize_crs(model_crs)
+        model_crs_info = CRS.from_user_input(model_crs)
+        if not model_crs_info.is_projected or not model_crs_info.axis_info:
+            raise ValueError(
+                "Hydrant search distance requires a projected model coordinate system."
+            )
+        model_units_to_meters = model_crs_info.axis_info[0].unit_conversion_factor
+        if not model_units_to_meters or not math.isfinite(model_units_to_meters):
+            raise ValueError("Could not determine model coordinate units.")
+        search_distance_model_units = (
+            search_distance_ft * 0.3048 / model_units_to_meters
+        )
         set_operation_progress("hydrants", 4, "Building model pipe geometries…")
         pipe_geometries = build_pipe_geometries(wn)
 
@@ -612,6 +665,23 @@ def connect_hydrants():
             hydrant_junction_name = make_unique_node_name(hydrant_junction_name, wn)
 
             nearest_pipe = nearest_pipe_for(hydrant_point)
+            if (
+                nearest_pipe["geometry"].distance(hydrant_point)
+                > search_distance_model_units
+            ):
+                skipped_count += 1
+                if hydrant_id_field and properties.get(hydrant_id_field) is not None:
+                    MODEL_STORE["element_mapping"].setdefault("hydrants", {}).pop(
+                        str(properties[hydrant_id_field]).strip(), None
+                    )
+                for property_name in (
+                    "model_elements",
+                    "hydrant_junction_name",
+                    "connection_node_name",
+                    "hydrant_pipe_name",
+                ):
+                    properties.pop(property_name, None)
+                continue
 
             pipe_name = nearest_pipe["name"]
             pipe_line = nearest_pipe["geometry"]
@@ -621,6 +691,10 @@ def connect_hydrants():
                 skipped_count += 1
                 continue
 
+            hydrant_pipe_diameter_m = min(
+                lateral_diameter_in * 0.0254,
+                float(pipe.diameter),
+            )
             nearest_point = pipe_line.interpolate(pipe_line.project(hydrant_point))
             x_split, y_split = nearest_point.x, nearest_point.y
 
@@ -721,13 +795,20 @@ def connect_hydrants():
             if hydrant_pipe_length <= 0:
                 hydrant_pipe_length = 0.01
 
+            headloss_formula = wn.options.hydraulic.headloss
+            
+            if headloss_formula == "D-W":
+                lateral_roughness_conv = lateral_roughness * 0.001 * 0.3048
+            else:
+                lateral_roughness_conv = lateral_roughness
+
             wn.add_pipe(
                 hydrant_pipe_name,
                 hydrant_junction_name,
                 connection_node_name,
                 length=hydrant_pipe_length,
-                diameter=0.1524,
-                roughness=100.0,
+                diameter=hydrant_pipe_diameter_m,
+                roughness=lateral_roughness_conv,
                 minor_loss=0.0,
                 initial_status="OPEN",
             )
@@ -758,6 +839,7 @@ def connect_hydrants():
         MODEL_STORE["uploaded_layers"]["hydrants"]["geojson"]["features"] = hydrants_layer["geojson"]["features"]
 
         MODEL_STORE["wn"] = wn
+        MODEL_STORE["connection_options"] = connection_options
 
         if MODEL_STORE["inp_path"]:
             set_operation_progress("hydrants", 94, "Saving updated water network…")
@@ -768,12 +850,21 @@ def connect_hydrants():
         return jsonify(
             {
                 "success": True,
-                "message": "Hydrants have been connected to the model.",
+                "message": (
+                    f"Connected {connected_count} hydrant(s); skipped "
+                    f"{skipped_count} hydrant(s), including those outside the "
+                    f"{search_distance_ft:g} ft search distance."
+                ),
                 "connected_count": connected_count,
                 "skipped_count": skipped_count,
+                "connection_options": connection_options,
+                "search_distance_ft": search_distance_ft,
                 "pipe_geojson": MODEL_STORE["pipe_geojson"],
             }
         )
+    except ValueError as exc:
+        set_operation_progress("hydrants", 100, str(exc), done=True, error=True)
+        return jsonify({"success": False, "message": str(exc)}), 400
     except Exception as exc:
         set_operation_progress("hydrants", 100, str(exc), done=True, error=True)
         print(traceback.format_exc())
@@ -786,6 +877,36 @@ def snap_valves():
     try:
         data = request.get_json(silent=True) or {}
         modified_valves = data.get("valves") or []
+        snap_distance_value = data.get(
+            "snap_distance_ft", MODEL_STORE.get("valve_snap_distance_ft", 120.0)
+        )
+        try:
+            snap_distance_ft = float(snap_distance_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Valve snap distance must be numeric.") from exc
+        if not math.isfinite(snap_distance_ft) or snap_distance_ft < 0:
+            raise ValueError("Valve snap distance must be a finite, non-negative number.")
+
+        model_crs = MODEL_STORE.get("model_crs")
+        if not model_crs:
+            raise ValueError("Model coordinate system is required to snap valves.")
+        model_crs_info = CRS.from_user_input(model_crs)
+        if not model_crs_info.is_projected or not model_crs_info.axis_info:
+            raise ValueError(
+                "Valve snap distance requires a projected model coordinate system."
+            )
+        model_units_to_meters = model_crs_info.axis_info[0].unit_conversion_factor
+        if not model_units_to_meters or not math.isfinite(model_units_to_meters):
+            raise ValueError("Could not determine model coordinate units.")
+        snap_distance_model_units = (
+            snap_distance_ft * 0.3048 / model_units_to_meters
+        )
+        to_model_crs = Transformer.from_crs(
+            "EPSG:4326", model_crs_info, always_xy=True
+        )
+        to_geojson_crs = Transformer.from_crs(
+            model_crs_info, "EPSG:4326", always_xy=True
+        )
 
         if MODEL_STORE["pipe_geojson"] is None:
             return (
@@ -825,7 +946,9 @@ def snap_valves():
             if not geometry:
                 continue
             try:
-                pipe_geometry = shape(geometry)
+                pipe_geometry = transform_geometry(
+                    to_model_crs.transform, shape(geometry)
+                )
             except Exception:
                 continue
             if pipe_geometry.is_valid:
@@ -844,7 +967,8 @@ def snap_valves():
                 400,
             )
 
-        features = valves_layer["geojson"].get("features", [])
+        all_features = valves_layer["geojson"].get("features", [])
+        features = all_features
         if modified_valves:
             features = _filter_modified_features("valves", modified_valves)
 
@@ -852,6 +976,8 @@ def snap_valves():
         pipe_tree = STRtree(pipe_geometries)
 
         total_valves = len(features)
+        connected_count = 0
+        skipped_count = 0
         for valve_index, feature in enumerate(features):
             completed_fraction = valve_index / max(1, total_valves)
             set_operation_progress(
@@ -861,9 +987,10 @@ def snap_valves():
             )
             geometry = feature.get("geometry")
             if not geometry:
+                skipped_count += 1
                 continue
 
-            point = shape(geometry)
+            point = transform_geometry(to_model_crs.transform, shape(geometry))
             nearest_pipe = pipe_tree.nearest(point)
             try:
                 nearest_pipe_index = index_value(nearest_pipe)
@@ -871,10 +998,30 @@ def snap_valves():
                 nearest_pipe = pipe_geometries[nearest_pipe_index]
             except TypeError:
                 nearest_pipe_feature = pipe_feature_by_geometry_id[id(nearest_pipe)]
+            if nearest_pipe.distance(point) > snap_distance_model_units:
+                skipped_count += 1
+                properties = feature.setdefault("properties", {})
+                id_field = valves_layer.get("id_field")
+                valve_id = properties.get(id_field) if id_field else None
+                if valve_id is not None:
+                    MODEL_STORE["element_mapping"].setdefault("valves", {}).pop(
+                        str(valve_id).strip(), None
+                    )
+                for property_name in (
+                    "model_elements",
+                    "model_pipe_name",
+                    "model_pipe_nodes",
+                ):
+                    properties.pop(property_name, None)
+                continue
+
             best_location = nearest_pipe.interpolate(nearest_pipe.project(point))
 
             if best_location is not None:
-                feature["geometry"]["coordinates"] = [best_location.x, best_location.y]
+                longitude, latitude = to_geojson_crs.transform(
+                    best_location.x, best_location.y
+                )
+                feature["geometry"]["coordinates"] = [longitude, latitude]
             pipe_properties = nearest_pipe_feature.get("properties") or {}
             pipe_name = pipe_properties.get("id") or pipe_properties.get("name")
             feature.setdefault("properties", {})["model_pipe_name"] = pipe_name
@@ -895,8 +1042,9 @@ def snap_valves():
                 },
                 valves_layer.get("id_field"),
             )
+            connected_count += 1
 
-        MODEL_STORE["uploaded_layers"]["valves"]["geojson"]["features"] = features
+        MODEL_STORE["valve_snap_distance_ft"] = snap_distance_ft
 
         set_operation_progress("valves", 88, "Saving snapped valve locations…")
 
@@ -907,7 +1055,7 @@ def snap_valves():
                 write_point_geojson_to_shapefile(
                     save_dir,
                     shape_name,
-                    {"type": "FeatureCollection", "features": features},
+                    {"type": "FeatureCollection", "features": all_features},
                     crs="EPSG:4326",
                 )
             except Exception as e:
@@ -915,14 +1063,32 @@ def snap_valves():
                     "Warning: failed to write snapped valves shapefile back to disk:", e
                 )
 
-        set_operation_progress("valves", 100, "Valves snapped successfully.", done=True)
+        set_operation_progress(
+            "valves",
+            100,
+            f"Snapped {connected_count} valve(s); skipped {skipped_count} outside "
+            f"the {snap_distance_ft:g} ft snap distance.",
+            done=True,
+        )
         return jsonify(
             {
                 "success": True,
-                "message": "Valves snapped to the closest pipes.",
-                "geojson": {"type": "FeatureCollection", "features": features},
+                "message": (
+                    f"Snapped {connected_count} valve(s); skipped {skipped_count} "
+                    f"outside the {snap_distance_ft:g} ft snap distance."
+                ),
+                "connected_count": connected_count,
+                "skipped_count": skipped_count,
+                "snap_distance_ft": snap_distance_ft,
+                "geojson": {
+                    "type": "FeatureCollection",
+                    "features": all_features,
+                },
             }
         )
+    except ValueError as exc:
+        set_operation_progress("valves", 100, str(exc), done=True, error=True)
+        return jsonify({"success": False, "message": str(exc)}), 400
     except Exception as exc:
         set_operation_progress("valves", 100, str(exc), done=True, error=True)
         print(traceback.format_exc())
@@ -1322,15 +1488,22 @@ def save_sequences():
 def receive_sequence_run_request(expected_count=None):
     data = request.get_json(silent=True) or {}
     sequences = data.get("sequences")
+    options = data.get("options")
+
+    if options is not None and not isinstance(options, dict):
+        return None, None, (
+            jsonify({"success": False, "message": "Flushing options must be an object."}),
+            400,
+        )
 
     if not isinstance(sequences, list):
-        return None, (
+        return None, None, (
             jsonify({"success": False, "message": "Sequences must be an array."}),
             400,
         )
 
     if not sequences:
-        return None, (
+        return None, None, (
             jsonify(
                 {"success": False, "message": "At least one sequence is required."}
             ),
@@ -1338,7 +1511,7 @@ def receive_sequence_run_request(expected_count=None):
         )
 
     if expected_count is not None and len(sequences) != expected_count:
-        return None, (
+        return None, None, (
             jsonify(
                 {
                     "success": False,
@@ -1352,7 +1525,7 @@ def receive_sequence_run_request(expected_count=None):
         if not isinstance(sequence, dict) or not isinstance(
             sequence.get("operations"), list
         ):
-            return None, (
+            return None, None, (
                 jsonify(
                     {
                         "success": False,
@@ -1362,43 +1535,136 @@ def receive_sequence_run_request(expected_count=None):
                 400,
             )
 
-    return sequences, None
+    return sequences, options, None
+
+
+def save_project_results(results_dict):
+    model_dir = MODEL_STORE.get("model_dir") or os.path.dirname(
+        MODEL_STORE.get("inp_path") or ""
+    )
+    if not model_dir:
+        raise ValueError("No project directory is available to save simulation results.")
+
+    os.makedirs(model_dir, exist_ok=True)
+    results_path = os.path.join(model_dir, "results.txt")
+    with open(results_path, "w", encoding="utf-8") as results_file:
+        json.dump(results_dict, results_file, indent=2, allow_nan=False)
+
+    MODEL_STORE["results_dict"] = results_dict
+    MODEL_STORE["results_path"] = results_path
 
 
 @app.route("/run_sequences", methods=["POST"])
 def run_sequences():
-    sequences, error = receive_sequence_run_request()
-
-    run_water_network_model(MODEL_STORE, sequences)
+    sequences, options, error = receive_sequence_run_request()
     if error:
         return error
+    if sequences is None:
+        return jsonify({"success": False, "message": "Sequences are required."}), 400
 
-    MODEL_STORE["sequences"] = sequences
-    return jsonify(
-        {
-            "success": True,
-            "message": f"Received {len(sequences)} sequence(s) for processing.",
-            "sequences": sequences,
-        }
-    )
+    try:
+        set_operation_progress("sequences", 1, "Preparing sequences...")
+        results_dict = run_water_network_model(
+            MODEL_STORE,
+            sequences,
+            options,
+            progress_callback=lambda percent, message: set_operation_progress(
+                "sequences", percent, message
+            ),
+        )
+        MODEL_STORE["sequences"] = sequences
+        save_project_results(results_dict)
+        set_operation_progress(
+            "sequences", 100, "Sequence run completed.", done=True
+        )
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Received {len(sequences)} sequence(s) for processing.",
+                "sequences": sequences,
+                "results_dict": results_dict,
+                "options": {
+                    "connection_options": MODEL_STORE.get("connection_options", {}),
+                    "flush_options": MODEL_STORE.get("flush_options", {}),
+                    "valve_snap_distance_ft": MODEL_STORE.get(
+                        "valve_snap_distance_ft", 120.0
+                    ),
+                },
+            }
+        )
+    except Exception as exc:
+        set_operation_progress(
+            "sequences", 100, str(exc), done=True, error=True
+        )
+        print(traceback.format_exc())
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 @app.route("/run_sequence", methods=["POST"])
 def run_sequence():
-    sequences, error = receive_sequence_run_request(expected_count=1)
-
-    run_water_network_model(MODEL_STORE, sequences)
+    sequences, options, error = receive_sequence_run_request(expected_count=1)
     if error:
         return error
+    if sequences is None:
+        return jsonify({"success": False, "message": "A sequence is required."}), 400
 
-    MODEL_STORE["sequences"] = sequences
-    return jsonify(
-        {
-            "success": True,
-            "message": "Received the current sequence for processing.",
-            "sequences": sequences,
-        }
-    )
+    try:
+        set_operation_progress("sequences", 1, "Preparing sequence...")
+        results_dict = run_water_network_model(
+            MODEL_STORE,
+            sequences,
+            options,
+            progress_callback=lambda percent, message: set_operation_progress(
+                "sequences", percent, message
+            ),
+        )
+        stored_sequences = MODEL_STORE.get("sequences", [])
+        updated_sequences = list(stored_sequences)
+        for sequence in sequences:
+            sequence_index = next(
+                (
+                    index
+                    for index, stored_sequence in enumerate(updated_sequences)
+                    if stored_sequence.get("name") == sequence.get("name")
+                ),
+                None,
+            )
+            if sequence_index is None:
+                updated_sequences.append(sequence)
+            else:
+                updated_sequences[sequence_index] = sequence
+        MODEL_STORE["sequences"] = updated_sequences
+
+        stored_results = dict(MODEL_STORE.get("results_dict", {}))
+        for sequence_name, sequence_results in results_dict.items():
+            merged_sequence_results = dict(stored_results.get(sequence_name, {}))
+            merged_sequence_results.update(sequence_results)
+            stored_results[sequence_name] = merged_sequence_results
+        save_project_results(stored_results)
+        set_operation_progress(
+            "sequences", 100, "Sequence run completed.", done=True
+        )
+        return jsonify(
+            {
+                "success": True,
+                "message": "Received the current sequence for processing.",
+                "sequences": updated_sequences,
+                "results_dict": stored_results,
+                "options": {
+                    "connection_options": MODEL_STORE.get("connection_options", {}),
+                    "flush_options": MODEL_STORE.get("flush_options", {}),
+                    "valve_snap_distance_ft": MODEL_STORE.get(
+                        "valve_snap_distance_ft", 120.0
+                    ),
+                },
+            }
+        )
+    except Exception as exc:
+        set_operation_progress(
+            "sequences", 100, str(exc), done=True, error=True
+        )
+        print(traceback.format_exc())
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 def parse_sequence_text(text, filename=None):
@@ -1454,14 +1720,13 @@ def parse_sequence_text(text, filename=None):
         if hydrants_match:
             hydrants_value = hydrants_match.group(1).strip()
             if hydrants_value:
-                parts = hydrants_value.split("*", 1)
-                hydrants_part = parts[0].strip()
-                if hydrants_part:
-                    open_hydrants = [
-                        val.strip() for val in hydrants_part.split(",") if val.strip()
-                    ]
-                if len(parts) > 1:
-                    orifice_size = parts[1].strip()
+                for token in hydrants_value.split(","):
+                    parts = token.split("*", 1)
+                    hydrant_id = parts[0].strip()
+                    if hydrant_id:
+                        open_hydrants.append(hydrant_id)
+                    if len(parts) > 1 and parts[1].strip() and not orifice_size:
+                        orifice_size = parts[1].strip()
 
         map_message_match = re.search(r"\|([^|]*)\|", block)
         if map_message_match:
@@ -1700,6 +1965,9 @@ def create_project_archive():
             },
         },
         "element_mapping": MODEL_STORE.get("element_mapping", {}),
+        "connection_options": MODEL_STORE.get("connection_options", {}),
+        "flush_options": MODEL_STORE.get("flush_options", {}),
+        "valve_snap_distance_ft": MODEL_STORE.get("valve_snap_distance_ft", 120.0),
         "sequences": [
             sequence.get("name") for sequence in MODEL_STORE.get("sequences", [])
         ],
@@ -1712,14 +1980,62 @@ def create_project_archive():
             "model.pkl",
             pickle.dumps(MODEL_STORE["wn"], protocol=pickle.HIGHEST_PROTOCOL),
         )
-
-        temp_inp_path = os.path.join(
-            app.config["UPLOAD_FOLDER"], f"project_model_{uuid.uuid4().hex}.inp"
+        archive.writestr(
+            "sequences.json",
+            json.dumps(MODEL_STORE.get("sequences", []), allow_nan=False),
         )
-        wntr.network.write_inpfile(MODEL_STORE["wn"], temp_inp_path)
-        with open(temp_inp_path, "rb") as inp_file:
-            archive.writestr("model.inp", inp_file.read())
-        os.remove(temp_inp_path)
+
+        model_dir = MODEL_STORE.get("model_dir") or os.path.dirname(
+            MODEL_STORE.get("inp_path") or ""
+        )
+        if not model_dir:
+            model_dir = tempfile.mkdtemp(
+                prefix="flushing_journal_project_",
+                dir=app.config["UPLOAD_FOLDER"],
+            )
+        os.makedirs(model_dir, exist_ok=True)
+
+        base_inp_path = MODEL_STORE.get("inp_path")
+        expected_base_inp_path = os.path.join(model_dir, "BaseModel.inp")
+        if (
+            not base_inp_path
+            or not os.path.exists(base_inp_path)
+            or os.path.abspath(base_inp_path)
+            != os.path.abspath(expected_base_inp_path)
+        ):
+            base_inp_path = expected_base_inp_path
+            wntr.network.write_inpfile(MODEL_STORE["wn"], base_inp_path)
+            set_model_paths(base_inp_path)
+
+        MODEL_STORE["model_dir"] = model_dir
+        with open(base_inp_path, "rb") as inp_file:
+            archive.writestr("inpFiles/BaseModel.inp", inp_file.read())
+
+        for generated_inp_path in MODEL_STORE.get("generated_inp_files", []):
+            if (
+                generated_inp_path
+                and os.path.isfile(generated_inp_path)
+                and os.path.abspath(os.path.dirname(generated_inp_path))
+                == os.path.abspath(model_dir)
+            ):
+                with open(generated_inp_path, "rb") as inp_file:
+                    archive.writestr(
+                        os.path.join(
+                            "inpFiles",
+                            os.path.basename(generated_inp_path),
+                        ).replace(os.sep, "/"),
+                        inp_file.read(),
+                    )
+
+        results_path = MODEL_STORE.get("results_path")
+        if (
+            results_path
+            and os.path.isfile(results_path)
+            and os.path.abspath(os.path.dirname(results_path))
+            == os.path.abspath(model_dir)
+        ):
+            with open(results_path, "r", encoding="utf-8") as results_file:
+                archive.writestr("results.txt", results_file.read())
 
         for layer_name in ["hydrants", "valves"]:
             layer = MODEL_STORE["uploaded_layers"].get(layer_name)
@@ -1747,35 +2063,131 @@ def restore_project_archive(project_file):
 
         wn = None
         model_crs = normalize_crs_string(meta.get("model_crs"))
+        project_dir = tempfile.mkdtemp(
+            prefix="flushing_journal_project_",
+            dir=app.config["UPLOAD_FOLDER"],
+        )
+        inp_members = [
+            member_name
+            for member_name in archive.namelist()
+            if member_name.lower().endswith(".inp")
+        ]
+        base_member = next(
+            (
+                member_name
+                for member_name in inp_members
+                if os.path.basename(member_name).lower() == "basemodel.inp"
+            ),
+            None,
+        )
+        if base_member is None:
+            base_member = next(
+                (
+                    member_name
+                    for member_name in inp_members
+                    if os.path.basename(member_name).lower() == "model.inp"
+                ),
+                None,
+            )
+
         inp_path = None
+        generated_inp_files = []
+        extracted_names = set()
+        for member_name in inp_members:
+            basename = os.path.basename(member_name)
+            if not basename or basename in extracted_names:
+                continue
+            if member_name == base_member:
+                destination_name = "BaseModel.inp"
+            else:
+                destination_name = basename
+
+            destination_path = os.path.join(project_dir, destination_name)
+            with open(destination_path, "wb") as inp_file:
+                inp_file.write(archive.read(member_name))
+            extracted_names.add(destination_name)
+
+            if destination_name == "BaseModel.inp":
+                inp_path = destination_path
+            else:
+                generated_inp_files.append(destination_path)
 
         if "model.pkl" in archive.namelist():
             wn = pickle.loads(archive.read("model.pkl"))
 
-        if "model.inp" in archive.namelist():
-            inp_path = os.path.join(
-                app.config["UPLOAD_FOLDER"], f"project_model_{uuid.uuid4().hex}.inp"
-            )
-            with open(inp_path, "wb") as inp_file:
-                inp_file.write(archive.read("model.inp"))
-            if wn is None:
-                wn = wntr.network.WaterNetworkModel(inp_path)
+        if wn is None and inp_path:
+            wn = wntr.network.WaterNetworkModel(inp_path)
 
         if wn is None:
             raise ValueError("Uploaded project archive does not contain a valid model.")
 
         if inp_path is None:
-            inp_path = os.path.join(
-                app.config["UPLOAD_FOLDER"], f"project_model_{uuid.uuid4().hex}.inp"
-            )
+            inp_path = os.path.join(project_dir, "BaseModel.inp")
+            wntr.network.write_inpfile(wn, inp_path)
+        elif base_member:
+            wn.options.hydraulic.pattern = None
             wntr.network.write_inpfile(wn, inp_path)
 
         MODEL_STORE["wn"] = wn
         set_model_paths(inp_path)
+        MODEL_STORE["model_dir"] = project_dir
+        MODEL_STORE["generated_inp_files"] = generated_inp_files
+        results_member = next(
+            (
+                member_name
+                for member_name in archive.namelist()
+                if member_name.lower() in {"results.txt", "results/results.txt"}
+            ),
+            None,
+        )
+        results_dict = {}
+        results_path = None
+        if results_member:
+            results_dict = json.loads(
+                archive.read(results_member).decode("utf-8")
+            )
+            if not isinstance(results_dict, dict):
+                raise ValueError("Project results file must contain a JSON object.")
+            results_path = os.path.join(project_dir, "results.txt")
+            with open(results_path, "w", encoding="utf-8") as results_file:
+                json.dump(results_dict, results_file, indent=2, allow_nan=False)
+        MODEL_STORE["results_dict"] = results_dict
+        MODEL_STORE["results_path"] = results_path
         MODEL_STORE["model_crs"] = model_crs
         MODEL_STORE["pipe_geojson"] = water_network_pipes_to_geojson(
             wn=wn, model_crs=model_crs
         )
+        MODEL_STORE["connection_options"] = {
+            "lateral_diameter_in": 5.99,
+            "lateral_roughness": 1.0,
+            "search_distance_ft": 120.0,
+        }
+        MODEL_STORE["flush_options"] = {
+            "model_timestep": 0,
+            "default_orifice_diam": 2.5,
+            "volume_turnovers": 3.0,
+            "min_flush_vel": 5.0,
+            "start_vel_to_flushing_vel_ratio": 3.0,
+        }
+        MODEL_STORE["valve_snap_distance_ft"] = 120.0
+        saved_connection_options = meta.get("connection_options")
+        if isinstance(saved_connection_options, dict):
+            MODEL_STORE["connection_options"] = {
+                **MODEL_STORE["connection_options"],
+                **saved_connection_options,
+            }
+        saved_flush_options = meta.get("flush_options")
+        if isinstance(saved_flush_options, dict):
+            MODEL_STORE["flush_options"] = {
+                **MODEL_STORE["flush_options"],
+                **saved_flush_options,
+            }
+        try:
+            saved_snap_distance = float(meta.get("valve_snap_distance_ft", 120.0))
+        except (TypeError, ValueError):
+            saved_snap_distance = 120.0
+        if math.isfinite(saved_snap_distance) and saved_snap_distance >= 0:
+            MODEL_STORE["valve_snap_distance_ft"] = saved_snap_distance
 
         for layer_name in ["hydrants", "valves"]:
             if f"{layer_name}.geojson" in archive.namelist():
@@ -1806,14 +2218,27 @@ def restore_project_archive(project_file):
                 MODEL_STORE["uploaded_layers"][layer_name] = None
 
         sequences = []
-        for member_name in archive.namelist():
-            if member_name.lower().startswith(
-                "sequences/"
-            ) and member_name.lower().endswith(".txt"):
-                text = archive.read(member_name).decode("utf-8")
-                sequences.append(
-                    parse_sequence_text(text, os.path.basename(member_name))
+        if "sequences.json" in archive.namelist():
+            sequences = json.loads(
+                archive.read("sequences.json").decode("utf-8")
+            )
+            if not isinstance(sequences, list) or any(
+                not isinstance(sequence, dict)
+                or not isinstance(sequence.get("operations"), list)
+                for sequence in sequences
+            ):
+                raise ValueError(
+                    "Project sequences file must contain a list of sequences with operations."
                 )
+        else:
+            for member_name in archive.namelist():
+                if member_name.lower().startswith(
+                    "sequences/"
+                ) and member_name.lower().endswith(".txt"):
+                    text = archive.read(member_name).decode("utf-8")
+                    sequences.append(
+                        parse_sequence_text(text, os.path.basename(member_name))
+                    )
 
         MODEL_STORE["sequences"] = sequences
 
@@ -1836,6 +2261,14 @@ def restore_project_archive(project_file):
             "hydrants": MODEL_STORE["uploaded_layers"]["hydrants"],
             "valves": MODEL_STORE["uploaded_layers"]["valves"],
             "sequences": sequences,
+            "results_dict": results_dict,
+            "options": {
+                "connection_options": MODEL_STORE.get("connection_options", {}),
+                "flush_options": MODEL_STORE.get("flush_options", {}),
+                "valve_snap_distance_ft": MODEL_STORE.get(
+                    "valve_snap_distance_ft", 120.0
+                ),
+            },
         }
 
 
@@ -1870,7 +2303,15 @@ def make_project_response():
         ),
         "valves": get_uploaded_layer_response(MODEL_STORE["uploaded_layers"]["valves"]),
         "sequences": MODEL_STORE.get("sequences", []),
+        "results_dict": MODEL_STORE.get("results_dict", {}),
         "element_mapping": MODEL_STORE.get("element_mapping", {}),
+        "options": {
+            "connection_options": MODEL_STORE.get("connection_options", {}),
+            "flush_options": MODEL_STORE.get("flush_options", {}),
+            "valve_snap_distance_ft": MODEL_STORE.get(
+                "valve_snap_distance_ft", 120.0
+            ),
+        },
     }
 
 

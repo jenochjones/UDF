@@ -38,60 +38,47 @@
 
             <div class="toolbar-section toolbar-section-options hidden" data-toolbar="options">
                 <div class="toolbar-section-heading">
-                    <span class="toolbar-section-kicker">Configuration</span>
-                    <span class="toolbar-section-title">Model options</span>
+                    <span class="toolbar-section-kicker">Model Defaults</span>
                 </div>
                 <div class="toolbar-upload-block toolbar-layer-block">
-                    <label class="toolbar-label" for="modelTimestepInput">Model Timestep (hour)</label>
-                    <input id="modelTimestepInput" class="toolbar-input" type="number" min="0" max="23.75" step="0.25" value="0" />
-                    <div id="optionsStatus" class="toolbar-status"></div>
-                </div>
-
-                <div class="toolbar-upload-block toolbar-layer-block">
-                    <label class="toolbar-label" for="presDropWarningLimitInput">Pressure drop warning limit (psi)</label>
-                    <input id="presDropWarningLimitInput" class="toolbar-input" type="number" step="0.1" value="10.0" />
-
+                    <div class="option-readout"><span class="toolbar-label">Model timestep</span><output id="modelTimestepValue" class="toolbar-value">0 hour</output></div>
+                    <div class="option-readout"><span class="toolbar-label">Lateral diameter</span><output id="lateralDiamValue" class="toolbar-value">5.99 in</output></div>
+                    <div class="option-readout"><span class="toolbar-label">Lateral roughness</span><output id="lateralRoughnessValue" class="toolbar-value">1.0</output></div>
+                    <div class="option-readout"><span class="toolbar-label">Hydrant search distance</span><output id="searchDistValue" class="toolbar-value">120 ft</output></div>
+                    
+                    <div class="toolbar-spacer"></div>
+                    
                     <label class="toolbar-label" for="defaultOrificeDiamInput">Default orifice diameter (in)</label>
-                    <input id="defaultOrificeDiamInput" class="toolbar-input" type="number" step="0.01" value="2.5" />
+                    <input id="defaultOrificeDiamInput" class="toolbar-input" type="number" min="0.01" step="0.01" value="2.5" required />
+                    
+                </div>
 
-                    <label class="toolbar-label" for="volumeTurnoversInput">Volume turnovers</label>
-                    <input id="volumeTurnoversInput" class="toolbar-input" type="number" step="0.1" value="3.0" />
-
-                    <label class="toolbar-label" for="maxFlushDiamInput">Max flush diameter (in)</label>
-                    <input id="maxFlushDiamInput" class="toolbar-input" type="number" step="0.1" value="20.0" />
-
-                    <label class="toolbar-label" for="maxFlushLengthInput">Max flush length (ft)</label>
-                    <input id="maxFlushLengthInput" class="toolbar-input" type="number" step="1" value="5280" />
-
-                    <label class="toolbar-label" for="lateralDiamInput">Lateral diameter (in)</label>
-                    <input id="lateralDiamInput" class="toolbar-input" type="number" step="0.01" value="5.99" />
-
-                    <label class="toolbar-label" for="lateralRoughnessInput">Lateral roughness</label>
-                    <input id="lateralRoughnessInput" class="toolbar-input" type="number" step="0.01" value="1.0" />
-
-                    <label class="toolbar-label" for="outletCoeffInput">Outlet coefficient</label>
-                    <input id="outletCoeffInput" class="toolbar-input" type="number" step="0.01" value="0.9" />
-
-                    <label class="toolbar-label" for="hoseLengthInput">Hose length (ft)</label>
-                    <input id="hoseLengthInput" class="toolbar-input" type="number" step="0.1" value="15" />
-
-                    <label class="toolbar-label" for="hoseRoughnessInput">Hose roughness</label>
-                    <input id="hoseRoughnessInput" class="toolbar-input" type="number" step="0.01" value="1.0" />
-
-                    <label class="toolbar-label" for="minFlushVelInput">Min flush velocity (fps)</label>
-                    <input id="minFlushVelInput" class="toolbar-input" type="number" step="0.1" value="5.0" />
-
-                    <label class="toolbar-label" for="maxFlushVelInput">Max flush velocity (fps)</label>
-                    <input id="maxFlushVelInput" class="toolbar-input" type="number" step="0.1" value="10.0" />
-
-                    <label class="toolbar-label" for="minResPresInput">Min residual pressure (psi)</label>
-                    <input id="minResPresInput" class="toolbar-input" type="number" step="0.1" value="20" />
-
-                    <label class="toolbar-label" for="searchDistInput">Search distance (ft)</label>
-                    <input id="searchDistInput" class="toolbar-input" type="number" step="0.1" value="120.0" />
-
+                <div class="toolbar-section-heading">
+                    <span class="toolbar-section-kicker">Flushing Parameters</span>
+                </div>
+                <div class="toolbar-upload-block toolbar-layer-block">
                     <label class="toolbar-label" for="startVelToFlushingVelRatioInput">Start-to-flush velocity ratio</label>
-                    <input id="startVelToFlushingVelRatioInput" class="toolbar-input" type="number" step="0.1" value="3.0" />
+                    <input id="startVelToFlushingVelRatioInput" class="toolbar-input" type="number" min="0.01" step="any" value="3.0" required />
+                    <label class="toolbar-label" for="minFlushVelInput">Min flush velocity (fps)</label>
+                    <input id="minFlushVelInput" class="toolbar-input" type="number" min="0.01" step="any" value="5.0" required />
+                    <label class="toolbar-label" for="volumeTurnoversInput">Volume turnovers</label>
+                    <input id="volumeTurnoversInput" class="toolbar-input" type="number" min="0.01" step="any" value="3.0" required />
+                </div>
+
+                <div class="toolbar-section-heading">
+                    <span class="toolbar-section-kicker">Warning Parameters</span>
+                </div>
+                <div class="toolbar-upload-block toolbar-layer-block">
+                    <label class="toolbar-label" for="minResPresInput">Min residual pressure (psi)</label>
+                    <input id="minResPresInput" class="toolbar-input" type="number" min="0" step="0.1" value="20" required />
+                    <label class="toolbar-label" for="presDropWarningLimitInput">Pressure drop warning limit (psi)</label>
+                    <input id="presDropWarningLimitInput" class="toolbar-input" type="number" min="0" step="0.1" value="10.0" required />
+                    <label class="toolbar-label" for="maxFlushVelInput">Max flush velocity (fps)</label>
+                    <input id="maxFlushVelInput" class="toolbar-input" type="number" min="0" step="0.1" value="10.0" required />
+                    <label class="toolbar-label" for="maxFlushLengthInput">Max flush length (ft)</label>
+                    <input id="maxFlushLengthInput" class="toolbar-input" type="number" min="0" step="1" value="5280" required />
+                    <label class="toolbar-label" for="maxFlushDiamInput">Max flush diameter (in)</label>
+                    <input id="maxFlushDiamInput" class="toolbar-input" type="number" min="0" step="0.1" value="20.0" required />
                 </div>
 
                 <div class="toolbar-spacer"></div>
@@ -99,7 +86,38 @@
         </aside>
 
         <main class="main-area">
-            <div id="map"></div>
+            <div id="map">
+                <div id="sequencePlayback" class="sequence-playback" aria-label="Sequence results playback">
+                    <div id="sequencePlaybackLabel" class="sequence-playback-label">Run a sequence to view results</div>
+                    <div class="sequence-playback-controls">
+                        <button id="sequencePlaybackPrevious" type="button" aria-label="Previous operation" title="Previous operation" disabled>◀</button>
+                        <button id="sequencePlaybackToggle" type="button" aria-label="Play animation" title="Play animation" disabled>▶</button>
+                        <button id="sequencePlaybackNext" type="button" aria-label="Next operation" title="Next operation" disabled>▶|</button>
+                    </div>
+                    <label class="sequence-playback-filter">
+                        <input id="sequencePlaybackFilter" type="checkbox" disabled>
+                        Show only current operation's valves and hydrants
+                    </label>
+                    <label class="sequence-playback-filter">
+                        <input id="sequencePlaybackVelocities" type="checkbox" disabled>
+                        Show pipe velocities
+                    </label>
+                    <div id="sequenceVelocityLegend" class="sequence-playback-legend hidden" aria-label="Pipe velocity colors">
+                        <span><i class="playback-swatch velocity-under"></i>&lt; 0.1 ft/s</span>
+                        <span><i class="playback-swatch velocity-low"></i>0.1 to &lt; 3 ft/s</span>
+                        <span><i class="playback-swatch velocity-medium"></i>3 to &lt; 5 ft/s</span>
+                        <span><i class="playback-swatch velocity-high"></i>5 to 7 ft/s</span>
+                        <span><i class="playback-swatch velocity-over"></i>&gt; 7 ft/s</span>
+                    </div>
+                    <div class="sequence-playback-legend" aria-label="Map result colors">
+                        <span><i class="playback-swatch valve-closed"></i>Closed</span>
+                        <span><i class="playback-swatch valve-open"></i>Reopened</span>
+                        <span><i class="playback-swatch pipe-previous"></i>Previously flushed</span>
+                        <span><i class="playback-swatch pipe-current"></i>Flushed now</span>
+                        <span><i class="playback-swatch hydrant-current"></i>Flushing hydrant</span>
+                    </div>
+                </div>
+            </div>
             <div id="footer">
                 <div class="bottom-toolbar" aria-label="Workspace sections">
                     <button type="button" class="sidebar-mode-button active" data-toolbar-target="sequences">Sequences</button>
@@ -107,6 +125,9 @@
                     <div class="project-toolbar-actions">
                         <button id="editProjectBtn" class="project-toolbar-button" type="button" aria-label="Edit project" title="Edit project">
                             <span aria-hidden="true">✎</span>
+                        </button>
+                        <button id="selectMapFeaturesBtn" class="project-toolbar-button" type="button" aria-label="Select valves and hydrants" title="Select valves and hydrants" aria-pressed="false">
+                            <span aria-hidden="true">☑</span>
                         </button>
                         <button id="downloadProjectBtn" class="project-toolbar-button project-toolbar-save" type="button" aria-label="Save project as zip" title="Save project as zip">
                             <span aria-hidden="true">💾</span>
@@ -194,7 +215,15 @@
         <div class="modal-card">
             <button id="closeHydrantConnectModal" class="modal-close" type="button" aria-label="Close">×</button>
             <h3 id="hydrantConnectTitle">Connect hydrants</h3>
-            <p class="modal-copy">Connect the uploaded hydrants to the model network before continuing.</p>
+            <p class="modal-copy">Set the lateral properties and maximum distance for connecting hydrants to the model network.</p>
+            <div class="hydrant-connection-options">
+                <label class="modal-label" for="connectLateralDiameterInput">Lateral diameter (in)</label>
+                <input id="connectLateralDiameterInput" class="modal-input" type="number" min="0.01" step="0.01" value="5.99" />
+                <label class="modal-label" for="connectLateralRoughnessInput">Lateral roughness</label>
+                <input id="connectLateralRoughnessInput" class="modal-input" type="number" min="0.01" step="0.01" value="1.0" />
+                <label class="modal-label" for="connectHydrantSearchDistanceInput">Hydrant search distance (ft)</label>
+                <input id="connectHydrantSearchDistanceInput" class="modal-input" type="number" min="0" step="0.1" value="120.0" />
+            </div>
             <div class="modal-progress-block">
                 <div class="modal-progress-label">Progress</div>
                 <div class="modal-progress-track">
@@ -213,7 +242,9 @@
         <div class="modal-card">
             <button id="closeValveSnapModal" class="modal-close" type="button" aria-label="Close">×</button>
             <h3 id="valveSnapTitle">Snap valves</h3>
-            <p class="modal-copy">Snap all valves to the closest pipes in the model network.</p>
+            <p class="modal-copy">Snap valves to the closest pipe only when they are within the selected distance.</p>
+            <label class="modal-label" for="valveSnapDistanceInput">Maximum snap distance (ft)</label>
+            <input id="valveSnapDistanceInput" class="modal-input" type="number" min="0" step="any" value="120" required />
             <div class="modal-progress-block">
                 <div class="modal-progress-label">Progress</div>
                 <div class="modal-progress-track">
@@ -225,6 +256,23 @@
                 <button id="snapValvesModalBtn" class="modal-button primary" type="button">Snap Valves</button>
             </div>
             <div id="valveSnapStatus" class="modal-error" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <div id="sequenceRunModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="sequenceRunTitle">
+        <div class="modal-card">
+            <h3 id="sequenceRunTitle">Running sequences</h3>
+            <p id="sequenceRunMessage" class="modal-copy" aria-live="polite">Preparing simulation...</p>
+            <div class="modal-progress-block">
+                <div class="modal-progress-label">Simulation progress</div>
+                <div id="sequenceRunProgressTrack" class="modal-progress-track" role="progressbar" aria-label="Sequence simulation progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <div id="sequenceRunProgressBar" class="modal-progress-bar"></div>
+                </div>
+                <div id="sequenceRunProgressText" class="modal-progress-text">Starting...</div>
+            </div>
+            <div class="modal-actions">
+                <button id="sequenceRunCloseBtn" class="modal-button secondary hidden" type="button">Close</button>
+            </div>
         </div>
     </div>
 
@@ -259,6 +307,13 @@
                 <label class="modal-label" for="epsgTimestepInput">Run to timestep (hours)</label>
                 <input id="epsgTimestepInput" class="modal-input" type="number" min="0" max="23.75" step="0.25" value="0" />
             <div id="epsgModalError" class="modal-error" aria-live="polite"></div>
+            <div id="modelSetupProgress" class="modal-progress-block hidden" aria-live="polite">
+                <div class="modal-progress-label">Model setup progress</div>
+                <div class="modal-progress-track" role="progressbar" aria-label="Model upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <div id="modelSetupProgressBar" class="modal-progress-bar"></div>
+                </div>
+                <div id="modelSetupProgressText" class="modal-progress-text">Waiting to start...</div>
+            </div>
             <div class="modal-actions">
                 <button id="cancelEpsgModal" class="modal-button secondary" type="button">Cancel</button>
                 <button id="confirmEpsgModal" class="modal-button primary" type="button">Continue</button>
@@ -289,6 +344,27 @@
             <div class="modal-actions">
                 <button id="cancelRenameModal" class="modal-button secondary" type="button">Cancel</button>
                 <button id="confirmRenameModal" class="modal-button primary" type="button">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="operationOptionsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="operationOptionsTitle">
+        <div class="modal-card">
+            <button id="closeOperationOptionsModal" class="modal-close" type="button" aria-label="Close">×</button>
+            <h3 id="operationOptionsTitle">Operation options</h3>
+            <p class="modal-copy">Leave a value blank to use the project default.</p>
+            <label class="modal-label" for="operationOrificeDiameterInput">Orifice diameter (in)</label>
+            <input id="operationOrificeDiameterInput" class="modal-input" type="number" min="0.01" step="any" placeholder="Use project default" />
+            <label class="modal-label" for="operationVelocityRatioInput">Start-to-flush velocity ratio</label>
+            <input id="operationVelocityRatioInput" class="modal-input" type="number" min="0.01" step="any" placeholder="Use project default" />
+            <label class="modal-label" for="operationMinFlushVelocityInput">Minimum flush velocity (ft/s)</label>
+            <input id="operationMinFlushVelocityInput" class="modal-input" type="number" min="0.01" step="any" placeholder="Use project default" />
+            <label class="modal-label" for="operationVolumeTurnoversInput">Volume turnovers</label>
+            <input id="operationVolumeTurnoversInput" class="modal-input" type="number" min="0.01" step="any" placeholder="Use project default" />
+            <div id="operationOptionsError" class="modal-error" aria-live="polite"></div>
+            <div class="modal-actions">
+                <button id="cancelOperationOptionsModal" class="modal-button secondary" type="button">Cancel</button>
+                <button id="saveOperationOptionsModal" class="modal-button primary" type="button">Save</button>
             </div>
         </div>
     </div>

@@ -1,0 +1,101 @@
+  Page 1                                    Fri Oct 16 12:40:02 2026
+
+  ******************************************************************
+  *                           E P A N E T                          *
+  *                   Hydraulic and Water Quality                  *
+  *                   Analysis for Pipe Networks                   *
+  *                         Version 2.2                            *
+  ******************************************************************
+  
+  Analysis begun Fri Oct 16 12:40:02 2026
+
+   
+  Hydraulic Status:
+  -----------------------------------------------------------------------
+     0:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 1.271372
+              PRV PRV_400N-Z3 switched from active to open
+              PRV PRV_Z3-Z2_850N1800E switched from active to open
+              Trial  2: relative flow change = 0.353615
+              PRV PRV_MAPLE-Z2_LOWERTANK switched from active to open
+              PRV PRV_MAPLE-Z3_LOWERTANKS switched from active to open
+              PRV PRV_Z2-Z1_1600N switched from active to closed
+              PRV PRV_Z2-Z1_1600S switched from active to closed
+              PRV PRV_Z2-Z1_400S switched from active to closed
+              PRV PRV_Z2-Z1_HARMONYNORTH switched from active to closed
+              PRV PRV_Z3-Z2_BENCH switched from active to closed
+              PRV PRV_Z3-Z2_EAGLECOURT switched from active to closed
+              FCV CONTROL_MAPLEBENCH switched from active to open
+              Trial  3: relative flow change = 0.610225
+              PRV PRV_400N-Z3 switched from open to active
+              PRV PRV_MAPLE-Z2_LOWERTANK switched from open to active
+              PRV PRV_MAPLE-Z3_LOWERTANKS switched from open to active
+              PRV PRV_Z2-Z1_HARMONYNORTH switched from closed to active
+              PRV PRV_Z2-Z1_HARMONYSOUTH switched from active to closed
+              PRV PRV_Z3-Z2_850N1800E switched from open to active
+              PRV PRV_Z3-Z2_HIDDENNORTH switched from active to open
+              PRV PRV_Z3-Z2_VILLAGE switched from active to open
+              Trial  4: relative flow change = 0.374182
+              PRV PRV_400N-Z3 switched from active to open
+              PRV PRV_THEPRESERVEMAPLE switched from active to closed
+              PRV PRV_Z3-Z2_1600S switched from active to closed
+              PRV PRV_Z3-Z2_850N1800E switched from active to open
+              PRV PRV_Z3-Z2_HIDDENNORTH switched from open to active
+              PRV PRV_Z3-Z2_VILLAGE switched from open to active
+              Trial  5: relative flow change = 0.157099
+              PRV PRV_400N-Z3 switched from open to active
+              PRV PRV_THEPRESERVEMAPLE switched from closed to active
+              PRV PRV_Z3-Z2_1600S switched from closed to active
+              PRV PRV_Z3-Z2_BENCH switched from closed to active
+              PRV PRV_Z3-Z2_EAGLECOURT switched from closed to active
+              Trial  6: relative flow change = 0.220707
+              PRV PRV_400N-Z3 switched from active to open
+              Trial  7: relative flow change = 0.318607
+              PRV PRV_400N-Z3 switched from open to closed
+              PRV PRV_THEPRESERVEMAPLE switched from active to closed
+              PRV PRV_Z3-Z2_850N1800E switched from open to closed
+              PRV PRV_Z3-Z2_EAGLECOURT switched from active to closed
+              Trial  8: relative flow change = 0.247649
+              PRV PRV_400N-Z3 switched from closed to open
+              PRV PRV_MAPLE-Z3_LOWERTANKS switched from active to closed
+              Trial  9: relative flow change = 0.125786
+              PRV PRV_MAPLE-Z3_LOWERTANKS switched from closed to active
+              PRV PRV_THEPRESERVEMAPLE switched from closed to active
+              PRV PRV_Z3-Z2_BENCH switched from active to closed
+              Trial 10: relative flow change = 0.040135
+              PRV PRV_Z3-Z2_850N1800E switched from closed to open
+              Trial 11: relative flow change = 0.018024
+              PRV PRV_THEPRESERVEMAPLE switched from active to closed
+              Trial 12: relative flow change = 0.008812
+              Trial 13: relative flow change = 0.002634
+              Trial 14: relative flow change = 0.000077
+                        maximum  flow change = 1.5611 for Link P307_354b22
+                        maximum  head error  = 0.0001 for Link P295_496d56
+
+     0:00:00: Balanced after 14 trials
+     0:00:00: Reservoir RES_SEALWELL is emptying
+     0:00:00: Reservoir RES_CARNESECCAWELL is emptying
+     0:00:00: Reservoir RES_WESTWOODWELL is emptying
+     0:00:00: Reservoir RES_CROWD is emptying
+     0:00:00: Reservoir SPR_MAPLECANYON_SPRINGS is emptying
+     0:00:00: Tank T3_LOWERTANK is filling at 4.51 ft
+     0:00:00: Tank T1_MAPLE1 is emptying at 14.01 ft
+     0:00:00: Tank T2_MAPLE2 is emptying at 14.17 ft
+     0:00:00: Tank T4_WESTWOOD is closed at 15.00 ft
+     0:00:00: Tank T5_CROWD is emptying at 16.95 ft
+     0:00:00: FCV CONTROL_MAPLEBENCH open but cannot deliver flow
+     0:00:00: PRV PRV_400N-Z3 open
+     0:00:00: PRV PRV_THEPRESERVEMAPLE closed
+     0:00:00: PRV PRV_Z2-Z1_1600N closed
+     0:00:00: PRV PRV_Z2-Z1_1600S closed
+     0:00:00: PRV PRV_Z2-Z1_400S closed
+     0:00:00: PRV PRV_Z2-Z1_HARMONYSOUTH closed
+     0:00:00: PRV PRV_Z3-Z2_850N1800E open
+     0:00:00: PRV PRV_Z3-Z2_BENCH closed
+     0:00:00: PRV PRV_Z3-Z2_EAGLECOURT closed
+   
+  WARNING: Negative pressures at 0:00:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 0:00:00 hrs.
+   
+  Analysis ended Fri Oct 16 12:40:02 2026
