@@ -1,6 +1,9 @@
 let map;
 let modelPipeLayer;
 let uploadedLayerGroups = { valves: null, hydrants: null };
+let flushingZonesLayer = null;
+let flushingZonesLoaded = false;
+let flushingZonesLabelsVisible = false;
 let pendingModelFile = null;
 let modelLoaded = false;
 let hydrantsLoaded = false;
@@ -261,6 +264,7 @@ function initializeSidebarModeButtons() {
 
             button.classList.add("active");
             setActiveSidebarToolbar(button.getAttribute("data-toolbar-target"));
+            syncFlushingZonesOrder();
             updateAllLayersDraggability();
         });
     });
@@ -272,6 +276,16 @@ function initializeSidebarModeButtons() {
         setActiveSidebarToolbar('sequences');
     }
     updateAllLayersDraggability();
+    syncFlushingZonesOrder();
+}
+
+function syncFlushingZonesOrder() {
+    if (!flushingZonesLayer || !map) return;
+    if (document.querySelector('.sidebar-mode-button.active')?.dataset.toolbarTarget === 'flushingZones') {
+        flushingZonesLayer.bringToFront();
+    } else {
+        flushingZonesLayer.bringToBack();
+    }
 }
 
 function updateAllLayersDraggability() {
@@ -1675,6 +1689,11 @@ function initializeMap() {
         valves: L.layerGroup().addTo(map),
         hydrants: L.layerGroup().addTo(map)
     };
+    flushingZonesLayer = L.geoJSON(null, {
+        style: { color: "#ffb020", weight: 2, fillColor: "#ffcc66", fillOpacity: 0.22 },
+        onEachFeature: (feature, layer) => refreshFlushingZoneLabel(feature, layer)
+    }).addTo(map);
+    syncFlushingZonesOrder();
 
     setTimeout(function () {
         map.invalidateSize();
@@ -2393,6 +2412,20 @@ function getHydrantConnectionOptions() {
 }
 
 function initializeLayerUpload() {
+    document.getElementById("uploadFlushingZonesBtn")?.addEventListener("click", uploadFlushingZones);
+    document.getElementById("flushingZonesFieldSelect")?.addEventListener("change", async function () {
+        try {
+            const response = await fetch("/set_flushing_zone_label_field", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field: this.value, labels_visible: flushingZonesLabelsVisible }) });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.message || "Could not save label field.");
+            refreshFlushingZoneLabels();
+        } catch (error) { setLayerStatus("flushingZones", error.message, true); }
+    });
+    document.getElementById("flushingZonesLabelsToggle")?.addEventListener("change", function () {
+        flushingZonesLabelsVisible = this.checked;
+        refreshFlushingZoneLabels();
+        fetch("/set_flushing_zone_label_field", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field: document.getElementById("flushingZonesFieldSelect")?.value, labels_visible: flushingZonesLabelsVisible }) }).catch(console.error);
+    });
     const layerButtons = document.querySelectorAll("[data-upload-layer]");
     const valvesIdFieldSelect = document.getElementById("valvesIdFieldSelect");
     const hydrantsIdFieldSelect = document.getElementById("hydrantsIdFieldSelect");
@@ -2449,6 +2482,52 @@ function initializeLayerUpload() {
             uploadPointShapefile("sequences");
         });
     }
+}
+
+async function uploadFlushingZones() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.accept = ".shp,.shx,.dbf,.prj,.cpg";
+    input.onchange = async () => {
+        if (!input.files.length) return;
+        const formData = new FormData();
+        Array.from(input.files).forEach(file => formData.append("shape_files", file));
+        setLayerStatus("flushingZones", "Uploading polygon shapefile…", false);
+        try {
+            const response = await fetch("/upload_flushing_zones", { method: "POST", body: formData });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.message || "Upload failed.");
+            displayFlushingZones(data.geojson);
+            const select = document.getElementById("flushingZonesFieldSelect");
+            select.replaceChildren(new Option("No labels", ""));
+            (data.field_names || []).forEach(field => select.add(new Option(field, field)));
+            select.disabled = false;
+            const toggle = document.getElementById("flushingZonesLabelsToggle");
+            toggle.disabled = false;
+            setLayerStatus("flushingZones", `Loaded ${data.feature_count} flushing zone polygons.`, false);
+        } catch (error) { setLayerStatus("flushingZones", error.message, true); }
+    };
+    input.click();
+}
+
+function displayFlushingZones(geojson) {
+    flushingZonesLayer?.clearLayers();
+    flushingZonesLayer?.addData(geojson);
+    flushingZonesLoaded = true;
+    syncFlushingZonesOrder();
+}
+
+function refreshFlushingZoneLabel(feature, layer) {
+    const field = document.getElementById("flushingZonesFieldSelect")?.value;
+    const value = field ? feature?.properties?.[field] : null;
+    if (flushingZonesLabelsVisible && value !== null && value !== undefined && String(value).trim()) {
+        layer.bindTooltip(String(value), { permanent: true, direction: "center", className: "flushing-zone-label" });
+    } else if (layer.getTooltip()) layer.unbindTooltip();
+}
+
+function refreshFlushingZoneLabels() {
+    flushingZonesLayer?.eachLayer(layer => refreshFlushingZoneLabel(layer.feature, layer));
 }
 
 async function downloadProjectZip() {
@@ -2562,6 +2641,25 @@ async function uploadProjectZip() {
             valvesLoaded = true;
             updateSnapValvesButtonState();
         }
+
+        const zonesSelect = document.getElementById("flushingZonesFieldSelect");
+        if (data.flushing_zones) {
+            displayFlushingZones(data.flushing_zones.geojson);
+            zonesSelect.replaceChildren(new Option("No labels", ""));
+            (data.flushing_zones.fields || []).forEach(field => zonesSelect.add(new Option(field, field)));
+            zonesSelect.value = data.flushing_zones.label_field || "";
+            zonesSelect.disabled = false;
+            document.getElementById("flushingZonesLabelsToggle").disabled = false;
+            flushingZonesLabelsVisible = Boolean(data.flushing_zones.labels_visible);
+            document.getElementById("flushingZonesLabelsToggle").checked = flushingZonesLabelsVisible;
+        } else {
+            flushingZonesLayer?.clearLayers();
+            flushingZonesLoaded = false;
+            zonesSelect.replaceChildren(new Option("Upload a shapefile to select a field", ""));
+            zonesSelect.disabled = true;
+            document.getElementById("flushingZonesLabelsToggle").disabled = true;
+        }
+        refreshFlushingZoneLabels();
 
         updateConnectHydrantsButtonState();
 

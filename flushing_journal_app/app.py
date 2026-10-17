@@ -45,7 +45,7 @@ MODEL_STORE = {
     "model_crs": None,
     "model_time": 0,
     "pipe_geojson": None,
-    "uploaded_layers": {"valves": None, "hydrants": None},
+    "uploaded_layers": {"valves": None, "hydrants": None, "flushing_zones": None},
     "element_mapping": {"valves": {}, "hydrants": {}},
     "sequences": [],
     "results_dict": {},
@@ -275,6 +275,7 @@ def upload_project():
                 "pipe_geojson": result["pipe_geojson"],
                 "hydrants": result["hydrants"],
                 "valves": result["valves"],
+                "flushing_zones": result.get("flushing_zones"),
                 "sequences": result.get("sequences", []),
                 "results_dict": result.get("results_dict", {}),
                 "options": result.get("options", {}),
@@ -1410,6 +1411,54 @@ def upload_shapefile():
         return jsonify({"success": False, "message": str(exc)}), 500
 
 
+@app.route("/upload_flushing_zones", methods=["POST"])
+def upload_flushing_zones():
+    try:
+        uploaded_files = request.files.getlist("shape_files")
+        if not uploaded_files or all(file.filename == "" for file in uploaded_files):
+            return jsonify({"success": False, "message": "Select the shapefile components to upload."}), 400
+        save_dir = os.path.join(app.config["UPLOAD_FOLDER"], f"flushing_zones_{uuid.uuid4().hex[:8]}")
+        os.makedirs(save_dir, exist_ok=True)
+        shp_file = None
+        for uploaded_file in uploaded_files:
+            if uploaded_file.filename:
+                filename = secure_filename(uploaded_file.filename)
+                uploaded_file.save(os.path.join(save_dir, filename))
+                if filename.lower().endswith(".shp"):
+                    shp_file = filename
+        if not shp_file:
+            return jsonify({"success": False, "message": "A .shp file is required."}), 400
+        gdf = gpd.read_file(os.path.join(save_dir, shp_file))
+        if gdf.empty or not set(gdf.geom_type.str.lower().unique()).issubset({"polygon", "multipolygon"}):
+            return jsonify({"success": False, "message": "Flushing zones must contain polygon features."}), 400
+        if gdf.crs is None:
+            source_crs = request.form.get("source_crs", "").strip()
+            if not source_crs:
+                raise ValueError("The shapefile has no CRS; define its projection before uploading.")
+            gdf = gdf.set_crs(source_crs)
+        gdf = gdf.to_crs("EPSG:4326")
+        fields = [str(column) for column in gdf.columns if column != gdf.geometry.name]
+        geojson = json.loads(gdf.to_json(drop_id=True))
+        MODEL_STORE["uploaded_layers"]["flushing_zones"] = {"path": save_dir, "geojson": make_json_serializable(geojson), "shape_name": shp_file, "fields": fields, "label_field": None}
+        return jsonify({"success": True, "geojson": geojson, "field_names": fields, "feature_count": len(gdf)})
+    except Exception as exc:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route("/set_flushing_zone_label_field", methods=["POST"])
+def set_flushing_zone_label_field():
+    layer = MODEL_STORE["uploaded_layers"].get("flushing_zones")
+    field = (request.get_json(silent=True) or {}).get("field")
+    if not layer or (field and field not in layer.get("fields", [])):
+        return jsonify({"success": False, "message": "Invalid flushing zone field."}), 400
+    layer["label_field"] = field or None
+    visible = (request.get_json(silent=True) or {}).get("labels_visible")
+    if isinstance(visible, bool):
+        layer["labels_visible"] = visible
+    return jsonify({"success": True, "field": layer["label_field"]})
+
+
 @app.route("/upload_sequences", methods=["POST"])
 def upload_sequences():
     """
@@ -1975,6 +2024,11 @@ def create_project_archive():
                     else []
                 ),
             },
+            "flushing_zones": {
+                "fields": (MODEL_STORE["uploaded_layers"].get("flushing_zones") or {}).get("fields", []),
+                "label_field": (MODEL_STORE["uploaded_layers"].get("flushing_zones") or {}).get("label_field"),
+                "labels_visible": (MODEL_STORE["uploaded_layers"].get("flushing_zones") or {}).get("labels_visible", False),
+            },
         },
         "element_mapping": MODEL_STORE.get("element_mapping", {}),
         "connection_options": MODEL_STORE.get("connection_options", {}),
@@ -2049,7 +2103,7 @@ def create_project_archive():
             with open(results_path, "r", encoding="utf-8") as results_file:
                 archive.writestr("results.txt", results_file.read())
 
-        for layer_name in ["hydrants", "valves"]:
+        for layer_name in ["hydrants", "valves", "flushing_zones"]:
             layer = MODEL_STORE["uploaded_layers"].get(layer_name)
             if layer and layer.get("geojson"):
                 archive.writestr(f"{layer_name}.geojson", json.dumps(layer["geojson"]))
@@ -2251,6 +2305,19 @@ def restore_project_archive(project_file):
             else:
                 MODEL_STORE["uploaded_layers"][layer_name] = None
 
+        if "flushing_zones.geojson" in archive.namelist():
+            zones_geojson = json.loads(archive.read("flushing_zones.geojson").decode("utf-8"))
+            zones_meta = meta.get("uploaded_layers", {}).get("flushing_zones", {})
+            zones_fields = zones_meta.get("fields")
+            if not isinstance(zones_fields, list):
+                zones_fields = sorted({key for feature in zones_geojson.get("features", []) for key in (feature.get("properties") or {})})
+            label_field = zones_meta.get("label_field")
+            if label_field not in zones_fields:
+                label_field = None
+            MODEL_STORE["uploaded_layers"]["flushing_zones"] = {"path": None, "geojson": zones_geojson, "shape_name": "flushing_zones.geojson", "fields": zones_fields, "label_field": label_field, "labels_visible": bool(zones_meta.get("labels_visible", False))}
+        else:
+            MODEL_STORE["uploaded_layers"]["flushing_zones"] = None
+
         sequences = []
         if "sequences.json" in archive.namelist():
             sequences = json.loads(
@@ -2298,6 +2365,7 @@ def restore_project_archive(project_file):
             "valves": get_uploaded_layer_response(
                 MODEL_STORE["uploaded_layers"]["valves"]
             ),
+            "flushing_zones": ({"geojson": MODEL_STORE["uploaded_layers"]["flushing_zones"]["geojson"], "fields": MODEL_STORE["uploaded_layers"]["flushing_zones"]["fields"], "label_field": MODEL_STORE["uploaded_layers"]["flushing_zones"].get("label_field"), "labels_visible": MODEL_STORE["uploaded_layers"]["flushing_zones"].get("labels_visible", False)} if MODEL_STORE["uploaded_layers"].get("flushing_zones") else None),
             "sequences": sequences,
             "results_dict": results_dict,
             "options": {

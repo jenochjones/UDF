@@ -102,6 +102,17 @@
 
                 <div class="toolbar-spacer"></div>
             </div>
+
+            <div class="toolbar-section hidden" data-toolbar="flushingZones">
+                <div class="toolbar-section-heading"><span class="toolbar-section-kicker">Flushing Zones</span></div>
+                <div class="toolbar-upload-block toolbar-layer-block">
+                    <button id="uploadFlushingZonesBtn" class="sequence-action-button" type="button">Upload Flushing Zones</button>
+                    <div id="flushingZonesUploadStatus" class="toolbar-upload-status" aria-live="polite"></div>
+                    <label class="toolbar-label" for="flushingZonesFieldSelect">Polygon label field</label>
+                    <select id="flushingZonesFieldSelect" class="toolbar-input" disabled><option value="">Upload a shapefile to select a field</option></select>
+                    <label class="toolbar-label"><input id="flushingZonesLabelsToggle" type="checkbox" disabled> Show polygon labels</label>
+                </div>
+            </div>
         </aside>
 
         <main class="main-area">
@@ -109,7 +120,7 @@
                 <div id="sequencePlayback" class="sequence-playback" aria-label="Sequence results playback">
                     <div id="sequencePlaybackLabel" class="sequence-playback-label">Run a sequence to view results</div>
                     <div class="sequence-playback-controls">
-                        <button id="sequencePlaybackPrevious" type="button" aria-label="Previous operation" title="Previous operation" disabled>◀</button>
+                        <button id="sequencePlaybackPrevious" type="button" aria-label="Previous operation" title="Previous operation" disabled>|◀</button>
                         <button id="sequencePlaybackToggle" type="button" aria-label="Play animation" title="Play animation" disabled>▶</button>
                         <button id="sequencePlaybackNext" type="button" aria-label="Next operation" title="Next operation" disabled>▶|</button>
                     </div>
@@ -141,6 +152,7 @@
                 <div class="bottom-toolbar" aria-label="Workspace sections">
                     <button type="button" class="sidebar-mode-button active" data-toolbar-target="sequences">Sequences</button>
                     <button type="button" class="sidebar-mode-button" data-toolbar-target="options">Options</button>
+                    <button type="button" class="sidebar-mode-button" data-toolbar-target="flushingZones">Flushing Zones</button>
                     <div class="project-toolbar-actions">
                         <button id="editProjectBtn" class="project-toolbar-button" type="button" aria-label="Edit project" title="Edit project">
                             <span aria-hidden="true">✎</span>
