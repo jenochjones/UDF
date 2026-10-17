@@ -4,6 +4,7 @@ let uploadedLayerGroups = { valves: null, hydrants: null };
 let flushingZonesLayer = null;
 let flushingZonesLoaded = false;
 let flushingZonesLabelsVisible = false;
+let flushingZonesDrawControl = null;
 let pendingModelFile = null;
 let modelLoaded = false;
 let hydrantsLoaded = false;
@@ -2413,6 +2414,18 @@ function getHydrantConnectionOptions() {
 
 function initializeLayerUpload() {
     document.getElementById("uploadFlushingZonesBtn")?.addEventListener("click", uploadFlushingZones);
+    document.getElementById("flushingZonesVisibilityToggle")?.addEventListener("change", function () {
+        if (!flushingZonesLayer || !map) return;
+        if (this.checked) flushingZonesLayer.addTo(map);
+        else map.removeLayer(flushingZonesLayer);
+    });
+    document.getElementById("editFlushingZonesBtn")?.addEventListener("click", toggleFlushingZonesEdit);
+    map?.on(L.Draw.Event.CREATED, async function (event) {
+        flushingZonesLayer.addLayer(event.layer);
+        await saveFlushingZonesEdits();
+    });
+    map?.on(L.Draw.Event.EDITED, saveFlushingZonesEdits);
+    map?.on(L.Draw.Event.DELETED, saveFlushingZonesEdits);
     document.getElementById("flushingZonesFieldSelect")?.addEventListener("change", async function () {
         try {
             const response = await fetch("/set_flushing_zone_label_field", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field: this.value, labels_visible: flushingZonesLabelsVisible }) });
@@ -2515,7 +2528,47 @@ function displayFlushingZones(geojson) {
     flushingZonesLayer?.clearLayers();
     flushingZonesLayer?.addData(geojson);
     flushingZonesLoaded = true;
+    const editButton = document.getElementById("editFlushingZonesBtn");
+    if (editButton) editButton.disabled = false;
+    if (document.getElementById("flushingZonesVisibilityToggle")?.checked) flushingZonesLayer?.addTo(map);
     syncFlushingZonesOrder();
+}
+
+function toggleFlushingZonesEdit() {
+    if (!flushingZonesLayer || !flushingZonesLoaded || !L.Control.Draw) return;
+    const button = document.getElementById("editFlushingZonesBtn");
+    if (flushingZonesDrawControl) {
+        map.removeControl(flushingZonesDrawControl);
+        flushingZonesDrawControl = null;
+        button?.setAttribute("aria-pressed", "false");
+        if (button) button.textContent = "Edit Flushing Zones";
+        return;
+    }
+    if (!map.hasLayer(flushingZonesLayer)) {
+        document.getElementById("flushingZonesVisibilityToggle").checked = true;
+        flushingZonesLayer.addTo(map);
+    }
+    flushingZonesDrawControl = new L.Control.Draw({
+        position: "topleft",
+        draw: { polygon: { allowIntersection: false, showArea: true }, rectangle: false, polyline: false, circle: false, circlemarker: false, marker: false },
+        edit: { featureGroup: flushingZonesLayer, edit: true, remove: true }
+    });
+    map.addControl(flushingZonesDrawControl);
+    button?.setAttribute("aria-pressed", "true");
+    if (button) button.textContent = "Done Editing";
+}
+
+async function saveFlushingZonesEdits() {
+    const geojson = flushingZonesLayer?.toGeoJSON();
+    if (!geojson) return;
+    try {
+        const response = await fetch("/save_flushing_zones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ geojson }) });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || "Could not save flushing zones.");
+        setLayerStatus("flushingZones", `Saved ${geojson.features.length} flushing zone polygons.`, false);
+    } catch (error) {
+        setLayerStatus("flushingZones", error.message, true);
+    }
 }
 
 function refreshFlushingZoneLabel(feature, layer) {
@@ -2655,6 +2708,7 @@ async function uploadProjectZip() {
         } else {
             flushingZonesLayer?.clearLayers();
             flushingZonesLoaded = false;
+            document.getElementById("editFlushingZonesBtn").disabled = true;
             zonesSelect.replaceChildren(new Option("Upload a shapefile to select a field", ""));
             zonesSelect.disabled = true;
             document.getElementById("flushingZonesLabelsToggle").disabled = true;
@@ -3533,6 +3587,28 @@ function updateOperationWarningIndicators() {
             (window.lastWaterNetworkResults || {})[sequence.name] || {};
         const operationResult = sequenceResults[operationName] || {};
         const warnings = operationResult.warnings;
+        const inpFilename = operationResult.inp_filename;
+        let downloadButton = titleGroup.querySelector(".sequence-operation-inp-download");
+        if (!inpFilename) {
+            downloadButton?.remove();
+        } else if (!downloadButton) {
+            downloadButton = document.createElement("button");
+            downloadButton.type = "button";
+            downloadButton.className = "sequence-operation-inp-download";
+            downloadButton.textContent = "⇩";
+            downloadButton.title = "Download operation model INP file";
+            downloadButton.setAttribute("aria-label", "Download operation model INP file");
+            downloadButton.addEventListener("click", function (event) {
+                event.stopPropagation();
+                window.location.href = `/download_operation_inp/${encodeURIComponent(inpFilename)}`;
+            });
+            titleGroup.appendChild(downloadButton);
+        } else {
+            downloadButton.onclick = function (event) {
+                event.stopPropagation();
+                window.location.href = `/download_operation_inp/${encodeURIComponent(inpFilename)}`;
+            };
+        }
         let warningButton = titleGroup.querySelector(
             ".sequence-operation-warning"
         );

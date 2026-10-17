@@ -1459,6 +1459,42 @@ def set_flushing_zone_label_field():
     return jsonify({"success": True, "field": layer["label_field"]})
 
 
+@app.route("/download_operation_inp/<filename>", methods=["GET"])
+def download_operation_inp(filename):
+    safe_filename = secure_filename(filename)
+    if not safe_filename or safe_filename != filename or not safe_filename.lower().endswith(".inp"):
+        return jsonify({"success": False, "message": "Invalid model file."}), 400
+    model_dir = MODEL_STORE.get("model_dir")
+    for path in MODEL_STORE.get("generated_inp_files", []):
+        if (
+            path
+            and os.path.basename(path) == safe_filename
+            and model_dir
+            and os.path.abspath(os.path.dirname(path)) == os.path.abspath(model_dir)
+            and os.path.isfile(path)
+        ):
+            return send_file(path, as_attachment=True, download_name=safe_filename)
+    return jsonify({"success": False, "message": "The operation model file is no longer available. Run the operation again."}), 404
+
+
+@app.route("/save_flushing_zones", methods=["POST"])
+def save_flushing_zones():
+    layer = MODEL_STORE["uploaded_layers"].get("flushing_zones")
+    if not layer:
+        return jsonify({"success": False, "message": "Upload flushing zones before editing them."}), 400
+    geojson = (request.get_json(silent=True) or {}).get("geojson")
+    if not isinstance(geojson, dict) or geojson.get("type") != "FeatureCollection" or not isinstance(geojson.get("features"), list):
+        return jsonify({"success": False, "message": "Invalid flushing zone GeoJSON."}), 400
+    for feature in geojson["features"]:
+        geometry = feature.get("geometry") if isinstance(feature, dict) else None
+        if not isinstance(geometry, dict) or geometry.get("type") not in {"Polygon", "MultiPolygon"}:
+            return jsonify({"success": False, "message": "Flushing zones must contain polygon features only."}), 400
+    layer["geojson"] = make_json_serializable(geojson)
+    layer["path"] = None
+    layer["shape_name"] = "flushing_zones.geojson"
+    return jsonify({"success": True, "feature_count": len(geojson["features"])})
+
+
 @app.route("/upload_sequences", methods=["POST"])
 def upload_sequences():
     """

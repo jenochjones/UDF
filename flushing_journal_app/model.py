@@ -860,6 +860,7 @@ def run_water_network_model(
                     timestep=None,  # Uses final simulation timestep
                 )
                 operation_results["options"] = effective_operation_options
+                operation_results["inp_filename"] = os.path.basename(updated_inp)
 
                 warnings = []
                 total_flush_length_ft = operation_results.get(

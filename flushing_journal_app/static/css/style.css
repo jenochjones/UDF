@@ -975,6 +975,27 @@ select:focus-visible {
     right: 0;
 }
 
+.sequence-operation-inp-download {
+    position: absolute;
+    top: 30px;
+    right: 10px;
+    z-index: 1;
+    width: 12px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: none;
+    color: #1a76ad;
+    font-size: 14px;
+    line-height: 18px;
+    cursor: pointer;
+}
+
+.sequence-operation-inp-download:hover {
+    color: #00970d;
+}
+
 .sequence-operation-warning:hover {
     color:#00970d;
 }

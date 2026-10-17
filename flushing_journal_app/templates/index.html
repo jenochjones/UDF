@@ -106,6 +106,8 @@
             <div class="toolbar-section hidden" data-toolbar="flushingZones">
                 <div class="toolbar-section-heading"><span class="toolbar-section-kicker">Flushing Zones</span></div>
                 <div class="toolbar-upload-block toolbar-layer-block">
+                    <label class="toolbar-label"><input id="flushingZonesVisibilityToggle" type="checkbox" checked> Show flushing zones</label>
+                    <button id="editFlushingZonesBtn" class="sequence-action-button" type="button" aria-pressed="false" disabled>Edit Flushing Zones</button>
                     <button id="uploadFlushingZonesBtn" class="sequence-action-button" type="button">Upload Flushing Zones</button>
                     <div id="flushingZonesUploadStatus" class="toolbar-upload-status" aria-live="polite"></div>
                     <label class="toolbar-label" for="flushingZonesFieldSelect">Polygon label field</label>
@@ -415,6 +417,8 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
