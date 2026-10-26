@@ -389,6 +389,65 @@ body {
     overflow: hidden;
 }
 
+.workspace-area {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+}
+
+.item-action-toolbar {
+    flex: 0 0 52px;
+    width: 52px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 6px;
+    background: #d7dde4;
+    border-right: 1px solid #b8c1ca;
+}
+
+.item-action-button {
+    display: inline-flex;
+    width: 38px;
+    height: 38px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid #b8c1ca;
+    border-radius: 9px;
+    background: #f7f9fb;
+    color: #26303b;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.item-action-button:hover:not(:disabled) {
+    background: #e7edf3;
+    border-color: #8b9aaa;
+}
+
+.item-action-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.item-action-delete {
+    margin-top: auto;
+    color: #842029;
+    background: #f8d7da;
+    border-color: #f5c2c7;
+}
+
+.item-action-delete:hover:not(:disabled) {
+    background: #f1bfc4;
+}
+
 .toolbar-title {
     display: flex;
     align-items: center;
@@ -847,9 +906,28 @@ select:focus-visible {
 
 .sequence-toolbar {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     gap: 10px;
+}
+
+.sequence-icon-action {
+    min-width: 34px;
+    min-height: 32px;
+    padding: 4px 8px;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.sequence-delete-action {
+    color: #842029;
+    background: #f8d7da;
+    border-color: #f5c2c7;
+}
+
+.sequence-icon-action:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 .sequence-content {
@@ -898,7 +976,7 @@ select:focus-visible {
     font-size: 13px;
     cursor: pointer;
     text-align: left;
-    width: 60%;
+    width: 100%;
 }
 
 .sequence-tab-button.active {
@@ -929,40 +1007,19 @@ select:focus-visible {
     min-width: 50%;
     padding: 8px 12px;
     font-size: 12px;
-    background: #ffffff;
-    border: 1px solid #bcc5d0;
-    border-radius: 999px;
+    background: none;
+    border: none;
     color: #26303b;
     display: inline-flex;
     align-items: center;
 }
 
-.sequence-name-controls,
 .sequence-operation-title-group {
     display: flex;
     align-items: center;
     gap: 6px;
     flex: 1;
     min-width: 0;
-}
-
-.sequence-edit-button {
-    border: 1px solid #bcc5d0;
-    border-radius: 999px;
-    background: #f4f6f9;
-    color: #26303b;
-    width: 34px;
-    height: 34px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 16px;
-    padding: 0;
-}
-
-.sequence-edit-button:hover {
-    background: #dde7f1;
 }
 
 .sequence-operation-warning {
@@ -1011,13 +1068,6 @@ select:focus-visible {
     margin-top: 8px;
 }
 
-.sequence-edit-button:disabled,
-.sequence-edit-button[disabled] {
-    opacity: 0.45;
-    cursor: not-allowed;
-    pointer-events: none;
-}
-
 .sequence-action-button {
     border: 1px solid #bcc5d0;
     border-radius: 999px;
@@ -1030,19 +1080,6 @@ select:focus-visible {
 
 .sequence-action-button:hover {
     background: #dce6f1;
-}
-
-.sequence-add-button {
-    align-self: flex-start;
-    background: #0b6fbd;
-    color: white;
-    border-color: #0a5fad;
-}
-
-.sequence-delete-button {
-    background: #f8d7da;
-    color: #842029;
-    border-color: #f5c2c7;
 }
 
 .sequence-item .sequence-panel {
@@ -1076,6 +1113,13 @@ select:focus-visible {
     padding: 8px 12px;
     width: calc(100% - 24px);
     margin: 5px 0;
+    cursor: pointer;
+}
+
+.sequence-operation.selected .sequence-operation-header {
+    background: #d8eafa;
+    border-color: #0b6fbd;
+    box-shadow: 0 0 0 2px rgba(11, 111, 189, 0.18);
 }
 
 .sequence-operation-content {
@@ -1174,7 +1218,7 @@ select:focus-visible {
 .main-area {
     flex: 1 1 auto;
     min-width: 0;
-    height: 100vh;
+    height: auto;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1669,14 +1713,23 @@ select:focus-visible {
     }
 
     .left-toolbar,
+    .item-action-toolbar,
     .top-bar {
         display: none !important;
+    }
+
+    .workspace-area {
+        display: block;
+        width: 17in;
+        height: 11in;
     }
 
     .main-area {
         display: flex;
         padding: 0;
         margin: 0;
+        width: 17in;
+        height: 11in;
         overflow: hidden;
         background: white;
     }

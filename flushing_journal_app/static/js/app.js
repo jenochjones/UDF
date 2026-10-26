@@ -1,3 +1,5 @@
+const projectDefaults = window.PROJECT_DEFAULTS;
+
 let map;
 let modelPipeLayer;
 let uploadedLayerGroups = { valves: null, hydrants: null };
@@ -20,15 +22,16 @@ let movedHydrantMarkers = new Set();
 let movedValveMarkers = new Set();
 let currentSequences = [];
 let activeSequenceIndex = 0;
+let activeOperation = null;
 let sequenceSaveQueue = Promise.resolve(true);
 let playbackSteps = [];
 let activePlaybackStep = -1;
 let playbackTimer = null;
 let confirmModalResolve = null;
 let activeOperationOptions = null;
-let selectedModelHour = 0;
+let selectedModelHour = projectDefaults.flush_options.model_timestep;
 let flushOptions = {};
-let valveSnapDistanceFt = 120;
+let valveSnapDistanceFt = projectDefaults.valve_snap_distance_ft;
 let modelUploadInProgress = false;
 
 const dragState = {
@@ -58,6 +61,7 @@ document.addEventListener("DOMContentLoaded", function () {
     initializeModelUpload();
     initializeLayerUpload();
     initializeSequenceDialogs();
+    initializeItemActionToolbar();
     initializePdfDownload();
     initializeOperationWarningsDialog();
 });
@@ -1139,7 +1143,7 @@ function initializeSequenceDialogs() {
                 currentSequences,
                 `Options saved for ${operation.name || `Operation ${operationIndex + 1}`}.`
             );
-            selectSequenceTab(sequenceIndex);
+            selectSequenceTab(sequenceIndex, true);
             closeOperationOptions();
         }
     );
@@ -1349,26 +1353,220 @@ async function saveSequencesToServer() {
     return sequenceSaveQueue;
 }
 
-function addSequence() {
+function getActiveOperationLocation() {
+    if (!activeOperation) {
+        return null;
+    }
+
+    const sequenceIndex = currentSequences.findIndex(
+        (sequence) => sequence.operations?.includes(activeOperation)
+    );
+    if (sequenceIndex < 0) {
+        activeOperation = null;
+        return null;
+    }
+
+    return {
+        sequenceIndex,
+        operationIndex: currentSequences[sequenceIndex].operations.indexOf(activeOperation)
+    };
+}
+
+function updateItemActionToolbar() {
+    const addButton = document.getElementById("addActiveItemBtn");
+    const renameButton = document.getElementById("renameActiveItemBtn");
+    const moveUpButton = document.getElementById("moveActiveItemUpBtn");
+    const moveDownButton = document.getElementById("moveActiveItemDownBtn");
+    const renumberButton = document.getElementById("renumberOperationsBtn");
+    const deleteButton = document.getElementById("deleteActiveItemBtn");
+    const operationLocation = getActiveOperationLocation();
+    const activeSequence = currentSequences[activeSequenceIndex];
+    const hasActiveOperation = Boolean(operationLocation);
+
+    if (addButton) {
+        addButton.disabled = !hasActiveOperation;
+    }
+    if (renameButton) {
+        renameButton.disabled = !hasActiveOperation;
+    }
+    if (moveUpButton) {
+        moveUpButton.disabled = !operationLocation
+            || operationLocation.operationIndex <= 0;
+    }
+    if (moveDownButton) {
+        moveDownButton.disabled = !operationLocation
+            || operationLocation.operationIndex
+                >= activeSequence.operations.length - 1;
+    }
+    if (renumberButton) {
+        renumberButton.disabled = !activeSequence
+            || activeSequence.operations.length === 0;
+    }
+    if (deleteButton) {
+        deleteButton.disabled = !hasActiveOperation;
+    }
+
+    const renameSequenceButton = document.getElementById("renameActiveSequenceBtn");
+    const deleteSequenceButton = document.getElementById("deleteActiveSequenceBtn");
+    if (renameSequenceButton) {
+        renameSequenceButton.disabled = !activeSequence;
+    }
+    if (deleteSequenceButton) {
+        deleteSequenceButton.disabled = !activeSequence;
+    }
+}
+
+function initializeItemActionToolbar() {
+    document.getElementById("addSequenceBtn")?.addEventListener(
+        "click",
+        function () {
+            addSequence(currentSequences.length ? activeSequenceIndex + 1 : 0);
+        }
+    );
+
+    document.getElementById("renameActiveSequenceBtn")?.addEventListener(
+        "click",
+        async function () {
+            const sequence = currentSequences[activeSequenceIndex];
+            if (!sequence) {
+                return;
+            }
+            const newName = await window.showRenameDialog(
+                "Rename Sequence",
+                "Enter a new sequence name below.",
+                sequence.name || `Sequence ${activeSequenceIndex + 1}`
+            );
+            if (newName) {
+                renameSequence(activeSequenceIndex, newName);
+            }
+        }
+    );
+
+    document.getElementById("deleteActiveSequenceBtn")?.addEventListener(
+        "click",
+        function () {
+            deleteSequence(activeSequenceIndex);
+        }
+    );
+
+    document.getElementById("addActiveItemBtn")?.addEventListener(
+        "click",
+        function () {
+            const operationLocation = getActiveOperationLocation();
+            if (operationLocation) {
+                addOperation(
+                    operationLocation.sequenceIndex,
+                    operationLocation.operationIndex + 1
+                );
+            }
+        }
+    );
+
+    document.getElementById("renameActiveItemBtn")?.addEventListener(
+        "click",
+        async function () {
+            const operationLocation = getActiveOperationLocation();
+            if (operationLocation) {
+                const operation = activeOperation;
+                const { sequenceIndex, operationIndex } = operationLocation;
+                const currentName = operation.name || `Operation ${operationIndex + 1}`;
+                const newName = await window.showRenameDialog(
+                    "Rename Operation",
+                    "Enter a new operation name below.",
+                    currentName
+                );
+                if (newName) {
+                    renameOperation(sequenceIndex, operationIndex, newName);
+                }
+            }
+        }
+    );
+
+    document.getElementById("moveActiveItemUpBtn")?.addEventListener(
+        "click",
+        function () {
+            const operationLocation = getActiveOperationLocation();
+            if (operationLocation) {
+                moveOperationUp(
+                    operationLocation.sequenceIndex,
+                    operationLocation.operationIndex
+                );
+            }
+        }
+    );
+
+    document.getElementById("moveActiveItemDownBtn")?.addEventListener(
+        "click",
+        function () {
+            const operationLocation = getActiveOperationLocation();
+            if (operationLocation) {
+                moveOperationDown(
+                    operationLocation.sequenceIndex,
+                    operationLocation.operationIndex
+                );
+            }
+        }
+    );
+
+    document.getElementById("renumberOperationsBtn")?.addEventListener(
+        "click",
+        function () {
+            const sequence = currentSequences[activeSequenceIndex];
+            if (!sequence || sequence.operations.length === 0) {
+                return;
+            }
+
+            sequence.operations.forEach((operation, index) => {
+                operation.name = String(index + 1).padStart(2, "0");
+            });
+
+            renderSequences(
+                currentSequences,
+                `Renumbered operations in ${sequence.name}.`
+            );
+            selectSequenceTab(activeSequenceIndex, true);
+        }
+    );
+
+    document.getElementById("deleteActiveItemBtn")?.addEventListener(
+        "click",
+        function () {
+            const operationLocation = getActiveOperationLocation();
+            if (operationLocation) {
+                deleteOperation(
+                    operationLocation.sequenceIndex,
+                    operationLocation.operationIndex
+                );
+            }
+        }
+    );
+
+    updateItemActionToolbar();
+}
+
+function addSequence(insertIndex = currentSequences.length) {
     const nextIndex = currentSequences.length + 1;
     const newSequence = {
         name: `Sequence ${nextIndex}`,
         operations: []
     };
 
-    currentSequences.push(newSequence);
+    const targetIndex = Math.max(0, Math.min(insertIndex, currentSequences.length));
+    currentSequences.splice(targetIndex, 0, newSequence);
+    activeSequenceIndex = targetIndex;
+    activeOperation = null;
     renderSequences(currentSequences, `Sequence ${nextIndex} added.`);
-    selectSequenceTab(currentSequences.length - 1);
+    selectSequenceTab(targetIndex);
 }
 
-function addOperation(sequenceIndex) {
+function addOperation(sequenceIndex, insertIndex) {
     const sequence = currentSequences[sequenceIndex];
     if (!sequence) {
         return;
     }
 
     const nextOpIndex = sequence.operations.length + 1;
-    sequence.operations.push({
+    const newOperation = {
         name: `Operation ${nextOpIndex}`,
         open_valves: [],
         close_valves: [],
@@ -1378,10 +1576,17 @@ function addOperation(sequenceIndex) {
         target_velocity: "",
         toggle_mode: "Orifice Size",
         map_message: ""
-    });
+    };
+    const targetIndex = Math.max(
+        0,
+        Math.min(insertIndex ?? sequence.operations.length, sequence.operations.length)
+    );
+    sequence.operations.splice(targetIndex, 0, newOperation);
+    activeSequenceIndex = sequenceIndex;
+    activeOperation = newOperation;
 
     renderSequences(currentSequences, `Added operation to ${sequence.name}.`);
-    selectSequenceTab(sequenceIndex);
+    selectSequenceTab(sequenceIndex, true);
 }
 
 async function deleteSequence(sequenceIndex) {
@@ -1443,7 +1648,7 @@ function renameOperation(sequenceIndex, operationIndex, newName) {
 
     operation.name = newName || operation.name;
     renderSequences(currentSequences, `Renamed operation to ${operation.name}.`);
-    selectSequenceTab(sequenceIndex);
+    selectSequenceTab(sequenceIndex, true);
 }
 
 function moveSequenceUp(sequenceIndex) {
@@ -1500,7 +1705,7 @@ function reorderOperations(sequenceIndex, fromIndex, toIndex) {
     const [moved] = sequence.operations.splice(fromIndex, 1);
     sequence.operations.splice(toIndex, 0, moved);
     renderSequences(currentSequences, `Reordered operations in ${sequence.name}.`);
-    selectSequenceTab(sequenceIndex);
+    selectSequenceTab(sequenceIndex, true);
 }
 
 function handleSequenceDragStart(event, sequenceIndex) {
@@ -2244,10 +2449,12 @@ function initializeModelUpload() {
     confirmBtn.addEventListener("click", function () {
         const epsgValue = epsgInput.value.trim();
         const timestepInput = document.getElementById('epsgTimestepInput');
-        let timestepVal = 0;
+        let timestepVal = projectDefaults.flush_options.model_timestep;
         if (timestepInput) {
             const parsed = parseFloat(timestepInput.value);
-            timestepVal = Number.isFinite(parsed) ? Math.round(parsed * 4) / 4 : 0;
+            timestepVal = Number.isFinite(parsed)
+                ? Math.round(parsed * 4) / 4
+                : projectDefaults.flush_options.model_timestep;
         }
 
         if (!epsgValue) {
@@ -2298,24 +2505,17 @@ function initializeOptionsToolbar() {
             normalizedOptions.search_dist = savedConnection.search_distance_ft;
         }
         flushOptions = {
-            //pres_drop_warning_limit: 50.0,
-            default_orifice_diam: 2.5,
-            volume_turnovers: 3.0,
-            pipes_to_reflush: 1,
-            max_flush_diam: 20.0,
-            max_flush_length: 5280,
-            lateral_diam: 5.99,
-            lateral_roughness: 1.0,
-            min_flush_vel: 5.0,
-            max_flush_vel: 10.0,
-            min_res_pres: 20.0,
-            search_dist: 120.0,
-            start_vel_to_flushing_vel_ratio: 3.0,
-            model_timestep: selectedModelHour,
+            ...projectDefaults.flush_options,
+            lateral_diam: projectDefaults.connection_options.lateral_diameter_in,
+            lateral_roughness: projectDefaults.connection_options.lateral_roughness,
+            search_dist: projectDefaults.connection_options.search_distance_ft,
             ...(flushOptions || {}),
             ...normalizedOptions
         };
-        selectedModelHour = Number(flushOptions.model_timestep) || 0;
+        const configuredModelHour = Number(flushOptions.model_timestep);
+        selectedModelHour = Number.isFinite(configuredModelHour)
+            ? configuredModelHour
+            : projectDefaults.flush_options.model_timestep;
         const connectionInputs = {
             connectLateralDiameterInput: flushOptions.lateral_diam,
             connectLateralRoughnessInput: flushOptions.lateral_roughness,
@@ -2474,7 +2674,6 @@ function initializeLayerUpload() {
     const sequenceTabContainer = document.getElementById("sequenceTabs");
     const sequencePanelContainer = document.getElementById("sequencePanels");
     const loadSequencesBtn = document.getElementById("loadSequencesBtn");
-    const addSequenceBtn = document.getElementById("addSequenceBtn");
 
     if (sequenceTabContainer) {
         sequenceTabContainer.addEventListener("click", function (event) {
@@ -2484,10 +2683,6 @@ function initializeLayerUpload() {
             }
             selectSequenceTab(Number(button.dataset.sequenceIndex));
         });
-    }
-
-    if (addSequenceBtn) {
-        addSequenceBtn.addEventListener("click", addSequence);
     }
 
     if (loadSequencesBtn) {
@@ -2988,11 +3183,17 @@ function hideEpsgModal() {
     modal.classList.add("hidden");
     document.getElementById("modelSetupProgress")?.classList.add("hidden");
     epsgInput.value = "6625";
-    if (epsgTimestepInput) epsgTimestepInput.value = "0";
+    if (epsgTimestepInput) {
+        epsgTimestepInput.value = String(projectDefaults.flush_options.model_timestep);
+    }
     epsgError.textContent = "";
 }
 
-async function submitModelFile(file, modelCrs, modelTimestep=0) {
+async function submitModelFile(
+    file,
+    modelCrs,
+    modelTimestep = projectDefaults.flush_options.model_timestep
+) {
     if (!file) {
         setModelStatus("No file selected.", true);
         return;
@@ -3078,7 +3279,9 @@ async function submitModelFile(file, modelCrs, modelTimestep=0) {
         await new Promise((resolve) => setTimeout(resolve, 350));
         if (modal) modal.classList.add("hidden");
         const timestepInput = document.getElementById("epsgTimestepInput");
-        if (timestepInput) timestepInput.value = "0";
+        if (timestepInput) {
+            timestepInput.value = String(projectDefaults.flush_options.model_timestep);
+        }
         const epsgInput = document.getElementById("epsgInput");
         if (epsgInput) epsgInput.value = "6625";
 
@@ -3168,7 +3371,9 @@ function buildPipePopupHtml(props, flushMetrics) {
     const pipeName = escapePopupHtml(props.name || props.id || "Pipe");
     const diameter = flushMetrics?.diameter ?? props.diameter;
     const length = flushMetrics?.length
-        ?? (Number.isFinite(Number(props.length)) ? Number(props.length) * 3.280839895 : null);
+        ?? (Number.isFinite(Number(props.length))
+            ? Number(props.length) * projectDefaults.unit_conversions.meters_to_feet
+            : null);
     let popupHtml = `<strong>${pipeName}</strong>`;
     popupHtml += `<br>Pipe diameter: ${formatPopupNumber(diameter) || "N/A"}${diameter == null ? "" : " in"}`;
     popupHtml += `<br>Pipe length: ${formatPopupNumber(length) || "N/A"}${length == null ? "" : " ft"}`;
@@ -3261,9 +3466,14 @@ async function uploadSequenceFiles(files) {
     files.forEach(function (file) {
         formData.append("sequence_files", file);
     });
+    formData.append("active_sequence_index", String(activeSequenceIndex));
 
     try {
         setSequenceStatus(`Loading ${files.length} sequence file(s)...`, false);
+
+        if (!(await sequenceSaveQueue)) {
+            throw new Error("Could not save existing sequences before loading new ones.");
+        }
 
         const response = await fetch("/upload_sequences", {
             method: "POST",
@@ -3293,10 +3503,14 @@ function renderSequences(sequences, message) {
     }
 
     currentSequences = Array.isArray(sequences) ? sequences : [];
+    getActiveOperationLocation();
     sequenceTabs.innerHTML = "";
     sequencePanels.innerHTML = "";
 
     if (!Array.isArray(currentSequences) || currentSequences.length === 0) {
+        activeSequenceIndex = 0;
+        activeOperation = null;
+        updateItemActionToolbar();
         setSequenceStatus(message || "No sequences loaded.", false);
         return;
     }
@@ -3328,56 +3542,7 @@ function renderSequences(sequences, message) {
             selectSequenceTab(index);
         });
 
-        const nameControls = document.createElement('div');
-        nameControls.className = 'sequence-name-controls';
-
-        const editButton = document.createElement('button');
-        editButton.type = 'button';
-        editButton.className = 'sequence-edit-button';
-        editButton.title = 'Rename sequence';
-        editButton.textContent = '✎';
-        editButton.addEventListener('click', async function () {
-            const newName = await window.showRenameDialog('Rename Sequence', 'Enter a new sequence name below.', sequenceName);
-            if (newName) {
-                renameSequence(index, newName);
-            }
-        });
-
-        const upButton = document.createElement('button');
-        upButton.type = 'button';
-        upButton.className = 'sequence-edit-button sequence-move-button';
-        upButton.title = 'Move sequence up';
-        upButton.textContent = '↑';
-        upButton.disabled = index === 0;
-        upButton.addEventListener('click', function () {
-            moveSequenceUp(index);
-        });
-
-        const downButton = document.createElement('button');
-        downButton.type = 'button';
-        downButton.className = 'sequence-edit-button sequence-move-button';
-        downButton.title = 'Move sequence down';
-        downButton.textContent = '↓';
-        downButton.disabled = index === currentSequences.length - 1;
-        downButton.addEventListener('click', function () {
-            moveSequenceDown(index);
-        });
-
-        const deleteButton = document.createElement("button");
-        deleteButton.type = "button";
-        deleteButton.className = "sequence-action-button sequence-delete-button";
-        deleteButton.textContent = "-";
-        deleteButton.addEventListener("click", function () {
-            deleteSequence(index);
-        });
-
-        nameControls.appendChild(editButton);
-        nameControls.appendChild(upButton);
-        nameControls.appendChild(downButton);
-        nameControls.appendChild(deleteButton);
-
         headerRow.appendChild(tabButton);
-        headerRow.appendChild(nameControls);
 
         const panel = document.createElement("div");
         panel.className = `sequence-panel${index === activeSequenceIndex ? " active" : ""}`;
@@ -3414,56 +3579,6 @@ function renderSequences(sequences, message) {
             const operationNameGroup = document.createElement('div');
             operationNameGroup.className = 'sequence-operation-title-group';
             operationNameGroup.appendChild(operationTitleLabel);
-
-            const opEditButton = document.createElement('button');
-            opEditButton.type = 'button';
-            opEditButton.className = 'sequence-edit-button';
-            opEditButton.title = 'Rename operation';
-            opEditButton.textContent = '✎';
-            opEditButton.addEventListener('click', async function (event) {
-                event.stopPropagation();
-                const currentName = operation.name || `Operation ${operationIndex + 1}`;
-                const newName = await window.showRenameDialog('Rename Operation', 'Enter a new operation name below.', currentName);
-                if (newName) {
-                    renameOperation(index, operationIndex, newName);
-                }
-            });
-
-            const opUpButton = document.createElement('button');
-            opUpButton.type = 'button';
-            opUpButton.className = 'sequence-edit-button sequence-move-button';
-            opUpButton.title = 'Move operation up';
-            opUpButton.textContent = '↑';
-            opUpButton.disabled = operationIndex === 0;
-            opUpButton.addEventListener('click', function (event) {
-                event.stopPropagation();
-                moveOperationUp(index, operationIndex);
-            });
-
-            const opDownButton = document.createElement('button');
-            opDownButton.type = 'button';
-            opDownButton.className = 'sequence-edit-button sequence-move-button';
-            opDownButton.title = 'Move operation down';
-            opDownButton.textContent = '↓';
-            opDownButton.disabled = operationIndex === (sequence.operations || []).length - 1;
-            opDownButton.addEventListener('click', function (event) {
-                event.stopPropagation();
-                moveOperationDown(index, operationIndex);
-            });
-
-            const opDeleteButton = document.createElement("button");
-            opDeleteButton.type = "button";
-            opDeleteButton.className = "sequence-action-button sequence-delete-button";
-            opDeleteButton.textContent = "-";
-            opDeleteButton.addEventListener("click", function () {
-                deleteOperation(index, operationIndex);
-            });
-
-            operationNameGroup.appendChild(opEditButton);
-            operationNameGroup.appendChild(opUpButton);
-            operationNameGroup.appendChild(opDownButton);
-            operationNameGroup.appendChild(opDeleteButton);
- 
             operationHeader.appendChild(operationNameGroup);
 
             operationHeader.addEventListener('click', function (event) {
@@ -3471,17 +3586,10 @@ function renderSequences(sequences, message) {
                     return;
                 }
 
+                const wasActive = activeOperation === operation;
                 jumpToOperationPlayback(index, operationIndex);
-
-                const isOpen = operationSection.classList.toggle('open');
-                if (isOpen) {
-                    const siblingOperations = operationsList.querySelectorAll('.sequence-operation.open');
-                    siblingOperations.forEach((sibling) => {
-                        if (sibling !== operationSection) {
-                            sibling.classList.remove('open');
-                        }
-                    });
-                }
+                activeOperation = wasActive ? null : operation;
+                selectSequenceTab(index, true);
             });
 
             operationSection.appendChild(operationHeader);
@@ -3543,27 +3651,14 @@ function renderSequences(sequences, message) {
             operationsList.appendChild(operationSection);
         });
 
-        const addOpButton = document.createElement("button");
-        addOpButton.type = "button";
-        addOpButton.className = "sequence-action-button sequence-add-button";
-        addOpButton.textContent = "+ Add Operation";
-        addOpButton.addEventListener("click", function () {
-            addOperation(index);
-        });
-
         panel.appendChild(operationsList);
-        panel.appendChild(addOpButton);
-
-        headerRow.appendChild(tabButton);
-        headerRow.appendChild(nameControls);
-        headerRow.appendChild(deleteButton);
 
         item.appendChild(headerRow);
         item.appendChild(panel);
         sequenceTabs.appendChild(item);
     });
 
-    selectSequenceTab(activeSequenceIndex);
+    selectSequenceTab(activeSequenceIndex, true);
     updateOperationWarningIndicators();
     saveSequencesToServer();
     setSequenceStatus(message || `Loaded ${currentSequences.length} sequence${currentSequences.length === 1 ? "" : "s"}.`, false);
@@ -3819,20 +3914,35 @@ function createOperationOptionsRow(sequenceIndex, operationIndex, operation) {
     return row;
 }
 
-function selectSequenceTab(sequenceIndex) {
-    activeSequenceIndex = sequenceIndex;
+function selectSequenceTab(sequenceIndex, preserveOperationSelection = false) {
+    if (!preserveOperationSelection) {
+        activeOperation = null;
+    }
+    const operationLocation = preserveOperationSelection
+        ? getActiveOperationLocation()
+        : null;
+    activeSequenceIndex = currentSequences.length
+        ? operationLocation
+            ? operationLocation.sequenceIndex
+            : Math.max(0, Math.min(sequenceIndex, currentSequences.length - 1))
+        : 0;
     const items = document.querySelectorAll('.sequence-item');
     items.forEach((item) => {
         const index = Number(item.dataset.sequenceIndex);
-        const isActive = index === sequenceIndex;
+        const isActive = index === activeSequenceIndex;
         const tab = item.querySelector('.sequence-tab-button');
         const panel = item.querySelector('.sequence-panel');
         if (tab) tab.classList.toggle('active', isActive);
         if (panel) panel.classList.toggle('active', isActive);
-        if (!isActive) {
-            panel?.querySelectorAll('.sequence-operation.open')?.forEach(op => op.classList.remove('open'));
-        }
+        panel?.querySelectorAll('.sequence-operation').forEach((operationElement) => {
+            const operationIndex = Number(operationElement.dataset.operationIndex);
+            const operation = currentSequences[index]?.operations?.[operationIndex];
+            const isSelected = isActive && operation === activeOperation;
+            operationElement.classList.toggle('open', isSelected);
+            operationElement.classList.toggle('selected', isSelected);
+        });
     });
+    updateItemActionToolbar();
 }
 
 function displayPointLayer(layerType, geojson) {

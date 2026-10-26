@@ -19,6 +19,17 @@ from shapely.geometry import shape, Point, LineString
 from shapely.ops import transform as transform_geometry
 from shapely.strtree import STRtree
 
+from constants import (
+    DEFAULT_CONNECTION_OPTIONS,
+    DEFAULT_FLUSH_OPTIONS,
+    DEFAULT_MODEL_TIMESTEP_HOURS,
+    DEFAULT_VALVE_SNAP_DISTANCE_FT,
+    FEET_TO_METERS,
+    INCHES_TO_METERS,
+    METERS_TO_INCHES,
+    MILLIMETERS_TO_METERS,
+    PROJECT_DEFAULTS,
+)
 from model import build_steady_state_from_timestep, run_water_network_model
 
 app = Flask(__name__)
@@ -43,27 +54,16 @@ MODEL_STORE = {
     "rpt_path": None,
     "bin_path": None,
     "model_crs": None,
-    "model_time": 0,
+    "model_time": DEFAULT_MODEL_TIMESTEP_HOURS,
     "pipe_geojson": None,
     "uploaded_layers": {"valves": None, "hydrants": None, "flushing_zones": None},
     "element_mapping": {"valves": {}, "hydrants": {}},
     "sequences": [],
     "results_dict": {},
     "snapshots": {},
-    "connection_options": {
-        "lateral_diameter_in": 5.99,
-        "lateral_roughness": 1.0,
-        "search_distance_ft": 120.0,
-    },
-    "valve_snap_distance_ft": 120.0,
-    "flush_options": {
-        "model_timestep": 0,
-        "default_orifice_diam": 2.5,
-        "volume_turnovers": 3.0,
-        "pipes_to_reflush": 1,
-        "min_flush_vel": 5.0,
-        "start_vel_to_flushing_vel_ratio": 3.0,
-    },
+    "connection_options": dict(DEFAULT_CONNECTION_OPTIONS),
+    "valve_snap_distance_ft": DEFAULT_VALVE_SNAP_DISTANCE_FT,
+    "flush_options": dict(DEFAULT_FLUSH_OPTIONS),
 }
 
 OPERATION_PROGRESS = {
@@ -105,7 +105,7 @@ def set_model_paths(inp_path):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", project_defaults=PROJECT_DEFAULTS)
 
 
 @app.route("/upload_model", methods=["POST"])
@@ -169,13 +169,13 @@ def upload_model():
         inp_file.save(source_inp_path)
         base_model_path = os.path.join(project_dir, "BaseModel.inp")
 
-        model_timestep = 0.0
+        model_timestep = float(DEFAULT_MODEL_TIMESTEP_HOURS)
         try:
             mt_str = request.form.get("model_timestep", "").strip()
             if mt_str:
                 model_timestep = float(mt_str)
         except Exception:
-            model_timestep = 0.0
+            model_timestep = float(DEFAULT_MODEL_TIMESTEP_HOURS)
 
         try:
             wn = build_steady_state_from_timestep(
@@ -189,8 +189,6 @@ def upload_model():
 
         pipe_geojson = water_network_pipes_to_geojson(wn=wn, model_crs=model_crs)
 
-        print(f"[DEBUG] Model CRS: {model_crs}")
-
         MODEL_STORE["wn"] = wn
         set_model_paths(base_model_path)
         MODEL_STORE["model_dir"] = project_dir
@@ -200,19 +198,11 @@ def upload_model():
         MODEL_STORE["model_crs"] = model_crs
         MODEL_STORE["model_time"] = model_timestep
         MODEL_STORE["pipe_geojson"] = pipe_geojson
-        MODEL_STORE["connection_options"] = {
-            "lateral_diameter_in": 5.99,
-            "lateral_roughness": 1.0,
-            "search_distance_ft": 120.0,
-        }
-        MODEL_STORE["valve_snap_distance_ft"] = 120.0
+        MODEL_STORE["connection_options"] = dict(DEFAULT_CONNECTION_OPTIONS)
+        MODEL_STORE["valve_snap_distance_ft"] = DEFAULT_VALVE_SNAP_DISTANCE_FT
         MODEL_STORE["flush_options"] = {
+            **DEFAULT_FLUSH_OPTIONS,
             "model_timestep": model_timestep,
-            "default_orifice_diam": 2.5,
-            "volume_turnovers": 3.0,
-            "pipes_to_reflush": 1,
-            "min_flush_vel": 5.0,
-            "start_vel_to_flushing_vel_ratio": 3.0,
         }
         response = {
             "success": True,
@@ -560,7 +550,7 @@ def connect_hydrants():
         if not model_units_to_meters or not math.isfinite(model_units_to_meters):
             raise ValueError("Could not determine model coordinate units.")
         search_distance_model_units = (
-            search_distance_ft * 0.3048 / model_units_to_meters
+            search_distance_ft * FEET_TO_METERS / model_units_to_meters
         )
         set_operation_progress("hydrants", 4, "Building model pipe geometries…")
         pipe_geometries = build_pipe_geometries(wn)
@@ -695,7 +685,7 @@ def connect_hydrants():
                 continue
 
             hydrant_pipe_diameter_m = min(
-                lateral_diameter_in * 0.0254,
+                lateral_diameter_in * INCHES_TO_METERS,
                 float(pipe.diameter),
             )
             nearest_point = pipe_line.interpolate(pipe_line.project(hydrant_point))
@@ -801,7 +791,11 @@ def connect_hydrants():
             headloss_formula = wn.options.hydraulic.headloss
             
             if headloss_formula == "D-W":
-                lateral_roughness_conv = lateral_roughness * 0.001 * 0.3048
+                lateral_roughness_conv = (
+                    lateral_roughness
+                    * MILLIMETERS_TO_METERS
+                    * FEET_TO_METERS
+                )
             else:
                 lateral_roughness_conv = lateral_roughness
 
@@ -881,7 +875,10 @@ def snap_valves():
         data = request.get_json(silent=True) or {}
         modified_valves = data.get("valves") or []
         snap_distance_value = data.get(
-            "snap_distance_ft", MODEL_STORE.get("valve_snap_distance_ft", 120.0)
+            "snap_distance_ft",
+            MODEL_STORE.get(
+                "valve_snap_distance_ft", DEFAULT_VALVE_SNAP_DISTANCE_FT
+            ),
         )
         try:
             snap_distance_ft = float(snap_distance_value)
@@ -902,7 +899,7 @@ def snap_valves():
         if not model_units_to_meters or not math.isfinite(model_units_to_meters):
             raise ValueError("Could not determine model coordinate units.")
         snap_distance_model_units = (
-            snap_distance_ft * 0.3048 / model_units_to_meters
+            snap_distance_ft * FEET_TO_METERS / model_units_to_meters
         )
         to_model_crs = Transformer.from_crs(
             "EPSG:4326", model_crs_info, always_xy=True
@@ -1499,7 +1496,7 @@ def save_flushing_zones():
 def upload_sequences():
     """
     Upload one or more sequence text files, parse them on the backend,
-    store the sequence array, and return it to the frontend.
+    insert them after the active sequence, and return the updated array.
     """
     try:
         uploaded_files = request.files.getlist("sequence_files")
@@ -1510,6 +1507,37 @@ def upload_sequences():
                 ),
                 400,
             )
+
+        stored_sequences = MODEL_STORE.get("sequences", [])
+        active_sequence_index = request.form.get("active_sequence_index")
+        if active_sequence_index is None:
+            insertion_index = len(stored_sequences)
+        elif not stored_sequences:
+            insertion_index = 0
+        else:
+            try:
+                active_sequence_index = int(active_sequence_index)
+            except ValueError:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": "Active sequence index must be an integer.",
+                        }
+                    ),
+                    400,
+                )
+            if not 0 <= active_sequence_index < len(stored_sequences):
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": "Active sequence index is out of range.",
+                        }
+                    ),
+                    400,
+                )
+            insertion_index = active_sequence_index + 1
 
         sequences = []
         for uploaded_file in uploaded_files:
@@ -1532,13 +1560,18 @@ def upload_sequences():
             sequence = parse_sequence_text(text, filename)
             sequences.append(sequence)
 
-        MODEL_STORE["sequences"] = sequences
+        updated_sequences = (
+            stored_sequences[:insertion_index]
+            + sequences
+            + stored_sequences[insertion_index:]
+        )
+        MODEL_STORE["sequences"] = updated_sequences
 
         return jsonify(
             {
                 "success": True,
                 "message": f"Loaded {len(sequences)} sequence file(s).",
-                "sequences": sequences,
+                "sequences": updated_sequences,
             }
         )
     except Exception as exc:
@@ -1674,7 +1707,8 @@ def run_sequences():
                     "connection_options": MODEL_STORE.get("connection_options", {}),
                     "flush_options": MODEL_STORE.get("flush_options", {}),
                     "valve_snap_distance_ft": MODEL_STORE.get(
-                        "valve_snap_distance_ft", 120.0
+                        "valve_snap_distance_ft",
+                        DEFAULT_VALVE_SNAP_DISTANCE_FT,
                     ),
                 },
             }
@@ -1741,7 +1775,8 @@ def run_sequence():
                     "connection_options": MODEL_STORE.get("connection_options", {}),
                     "flush_options": MODEL_STORE.get("flush_options", {}),
                     "valve_snap_distance_ft": MODEL_STORE.get(
-                        "valve_snap_distance_ft", 120.0
+                        "valve_snap_distance_ft",
+                        DEFAULT_VALVE_SNAP_DISTANCE_FT,
                     ),
                 },
             }
@@ -1881,12 +1916,6 @@ def point_shapefile_to_geojson(shp_path, source_crs=None):
 
     gdf = gpd.read_file(shp_path)
 
-    print(f"[DEBUG] Current CRS: {gdf.crs}")
-    print(f"[DEBUG] Source CRS provided: {source_crs}")
-    print(
-        f"[DEBUG] Sample coordinates before transformation: {gdf.geometry.iloc[0] if len(gdf) > 0 else 'No geometries'}"
-    )
-
     if gdf.empty:
         return {"type": "FeatureCollection", "features": []}, []
 
@@ -1907,7 +1936,6 @@ def point_shapefile_to_geojson(shp_path, source_crs=None):
     if gdf.crs is None:
         if source_crs:
             norm_source = normalize_crs(source_crs)
-            print(f"[DEBUG] No CRS in shapefile. Setting to: {norm_source}")
             gdf = gdf.set_crs(norm_source, allow_override=True)
         else:
             gdf = gdf.set_crs("EPSG:4326", allow_override=True)
@@ -1919,21 +1947,11 @@ def point_shapefile_to_geojson(shp_path, source_crs=None):
 
         if source_crs:
             norm_source = normalize_crs(source_crs)
-            print(
-                f"[DEBUG] Comparing CRS: shapefile={shapefile_crs_str} vs provided={norm_source}"
-            )
             if shapefile_crs_str != norm_source:
-                print(
-                    f"[DEBUG] CRS mismatch. Reprojecting from {shapefile_crs_str} to {norm_source}"
-                )
                 gdf = gdf.to_crs(norm_source)
             else:
                 print(f"[DEBUG] CRS already matches: {norm_source}")
 
-    print(f"[DEBUG] After CRS handling, GDF CRS: {gdf.crs}")
-    print(
-        f"[DEBUG] Sample coordinates after CRS handling: {gdf.geometry.iloc[0] if len(gdf) > 0 else 'No geometries'}"
-    )
 
     field_names = [col for col in gdf.columns if col.lower() != "geometry"]
     gdf_wgs84 = gdf.to_crs("EPSG:4326")
@@ -2069,7 +2087,9 @@ def create_project_archive():
         "element_mapping": MODEL_STORE.get("element_mapping", {}),
         "connection_options": MODEL_STORE.get("connection_options", {}),
         "flush_options": MODEL_STORE.get("flush_options", {}),
-        "valve_snap_distance_ft": MODEL_STORE.get("valve_snap_distance_ft", 120.0),
+        "valve_snap_distance_ft": MODEL_STORE.get(
+            "valve_snap_distance_ft", DEFAULT_VALVE_SNAP_DISTANCE_FT
+        ),
         "sequences": [
             sequence.get("name") for sequence in MODEL_STORE.get("sequences", [])
         ],
@@ -2259,20 +2279,9 @@ def restore_project_archive(project_file):
         MODEL_STORE["pipe_geojson"] = water_network_pipes_to_geojson(
             wn=wn, model_crs=model_crs
         )
-        MODEL_STORE["connection_options"] = {
-            "lateral_diameter_in": 5.99,
-            "lateral_roughness": 1.0,
-            "search_distance_ft": 120.0,
-        }
-        MODEL_STORE["flush_options"] = {
-            "model_timestep": 0,
-            "default_orifice_diam": 2.5,
-            "volume_turnovers": 3.0,
-            "pipes_to_reflush": 1,
-            "min_flush_vel": 5.0,
-            "start_vel_to_flushing_vel_ratio": 3.0,
-        }
-        MODEL_STORE["valve_snap_distance_ft"] = 120.0
+        MODEL_STORE["connection_options"] = dict(DEFAULT_CONNECTION_OPTIONS)
+        MODEL_STORE["flush_options"] = dict(DEFAULT_FLUSH_OPTIONS)
+        MODEL_STORE["valve_snap_distance_ft"] = DEFAULT_VALVE_SNAP_DISTANCE_FT
         saved_connection_options = meta.get("connection_options")
         if isinstance(saved_connection_options, dict):
             MODEL_STORE["connection_options"] = {
@@ -2286,9 +2295,11 @@ def restore_project_archive(project_file):
                 **saved_flush_options,
             }
         try:
-            saved_snap_distance = float(meta.get("valve_snap_distance_ft", 120.0))
+            saved_snap_distance = float(
+                meta.get("valve_snap_distance_ft", DEFAULT_VALVE_SNAP_DISTANCE_FT)
+            )
         except (TypeError, ValueError):
-            saved_snap_distance = 120.0
+            saved_snap_distance = DEFAULT_VALVE_SNAP_DISTANCE_FT
         if math.isfinite(saved_snap_distance) and saved_snap_distance >= 0:
             MODEL_STORE["valve_snap_distance_ft"] = saved_snap_distance
 
@@ -2408,7 +2419,8 @@ def restore_project_archive(project_file):
                 "connection_options": MODEL_STORE.get("connection_options", {}),
                 "flush_options": MODEL_STORE.get("flush_options", {}),
                 "valve_snap_distance_ft": MODEL_STORE.get(
-                    "valve_snap_distance_ft", 120.0
+                    "valve_snap_distance_ft",
+                    DEFAULT_VALVE_SNAP_DISTANCE_FT,
                 ),
             },
         }
@@ -2451,7 +2463,8 @@ def make_project_response():
             "connection_options": MODEL_STORE.get("connection_options", {}),
             "flush_options": MODEL_STORE.get("flush_options", {}),
             "valve_snap_distance_ft": MODEL_STORE.get(
-                "valve_snap_distance_ft", 120.0
+                "valve_snap_distance_ft",
+                DEFAULT_VALVE_SNAP_DISTANCE_FT,
             ),
         },
     }
@@ -2561,7 +2574,7 @@ def water_network_pipes_to_geojson(wn, model_crs):
         diameter_meters = safe_float(getattr(pipe, "diameter", None))
         diameter_inches = None
         if diameter_meters is not None:
-            diameter_inches = diameter_meters * 39.37007874015748
+            diameter_inches = diameter_meters * METERS_TO_INCHES
 
         feature = {
             "type": "Feature",

@@ -1,4 +1,5 @@
 
+from copyreg import pickle
 import math
 import os
 import re
@@ -9,6 +10,25 @@ from typing import Callable, Optional, Union
 import wntr
 from wntr.network.model import WaterNetworkModel
 from wntr.network.base import LinkStatus
+
+from constants import (
+    CUBIC_METERS_PER_SECOND_TO_GALLONS_PER_MINUTE,
+    CUBIC_METERS_TO_GALLONS,
+    DEFAULT_MAX_FLUSH_DIAMETER_IN,
+    DEFAULT_MAX_FLUSH_LENGTH_FT,
+    DEFAULT_MAX_FLUSH_VELOCITY_FPS,
+    DEFAULT_MIN_FLUSH_VELOCITY_FPS,
+    DEFAULT_MIN_RESIDUAL_PRESSURE_PSI,
+    DEFAULT_ORIFICE_DIAMETER_IN,
+    DEFAULT_PIPES_TO_REFLUSH,
+    DEFAULT_START_TO_FLUSH_VELOCITY_RATIO,
+    DEFAULT_VOLUME_TURNOVERS,
+    METERS_TO_FEET,
+    METERS_TO_INCHES,
+    ORIFICE_EMITTER_COEFFICIENT_DENOMINATOR,
+    ORIFICE_EMITTER_COEFFICIENT_NUMERATOR,
+    PSI_PER_FOOT_OF_WATER,
+)
 
 
 
@@ -318,28 +338,37 @@ def run_water_network_model(
         return value
 
     velocity_multiplier = numeric_option(
-        "start_vel_to_flushing_vel_ratio", 3.0
+        "start_vel_to_flushing_vel_ratio",
+        DEFAULT_START_TO_FLUSH_VELOCITY_RATIO,
     )
-    minimum_flush_velocity_fps = numeric_option("min_flush_vel", 5.0)
-    volume_turnovers = numeric_option("volume_turnovers", 3.0)
-    default_orifice_diam = numeric_option("default_orifice_diam", 2.5)
+    minimum_flush_velocity_fps = numeric_option(
+        "min_flush_vel", DEFAULT_MIN_FLUSH_VELOCITY_FPS
+    )
+    volume_turnovers = numeric_option(
+        "volume_turnovers", DEFAULT_VOLUME_TURNOVERS
+    )
+    default_orifice_diam = numeric_option(
+        "default_orifice_diam", DEFAULT_ORIFICE_DIAMETER_IN
+    )
     max_flush_length = numeric_option(
-        "max_flush_length", 5280.0, allow_zero=True
+        "max_flush_length", DEFAULT_MAX_FLUSH_LENGTH_FT, allow_zero=True
     )
     max_flush_diam = numeric_option(
-        "max_flush_diam", 20.0, allow_zero=True
+        "max_flush_diam", DEFAULT_MAX_FLUSH_DIAMETER_IN, allow_zero=True
     )
     max_flush_vel = numeric_option(
-        "max_flush_vel", 10.0, allow_zero=True
+        "max_flush_vel", DEFAULT_MAX_FLUSH_VELOCITY_FPS, allow_zero=True
     )
     min_res_pres = numeric_option(
-        "min_res_pres", 20.0, allow_zero=True
+        "min_res_pres", DEFAULT_MIN_RESIDUAL_PRESSURE_PSI, allow_zero=True
     )
     #pres_drop_warning_limit = numeric_option(
     #    "pres_drop_warning_limit", 10.0, allow_zero=True
     #)
     try:
-        pipes_to_reflush_value = float(run_options.get("pipes_to_reflush", 1))
+        pipes_to_reflush_value = float(
+            run_options.get("pipes_to_reflush", DEFAULT_PIPES_TO_REFLUSH)
+        )
     except (TypeError, ValueError) as exc:
         raise ValueError("Flushing option 'pipes_to_reflush' must be an integer.") from exc
     if (
@@ -374,13 +403,6 @@ def run_water_network_model(
         )
 
     results_dict = {}
-
-    # WNTR stores model geometry in SI units.
-    M_TO_FT = 3.280839895
-    M_TO_IN = 39.37007874
-    M3S_TO_GPM = 15850.323141489
-    M3_TO_GAL = 264.172052358
-
 
     def _get_result_row(results, result_name, timestep=None):
         """
@@ -421,9 +443,9 @@ def run_water_network_model(
         already_flushed,
         velocity_limit_fps,
         velocity_multiplier,
-        pipes_to_reflush=1,
+        pipes_to_reflush=DEFAULT_PIPES_TO_REFLUSH,
     ):
-        velocity_limit_mps = velocity_limit_fps / M_TO_FT
+        velocity_limit_mps = velocity_limit_fps / METERS_TO_FEET
 
         pipe_adjacency = {}
 
@@ -478,9 +500,11 @@ def run_water_network_model(
                 else:
                     flush_ratio = pipe_velocity / base_pipe_velocity
 
+                pipe_not_already_flushed = pipe_name not in already_flushed 
+                
                 if wn.get_link(pipe_name).link_type.lower() == "pipe":
                     if pipe_count >= pipes_to_reflush:
-                        is_flushed = (pipe_velocity > velocity_limit_mps and flush_ratio > velocity_multiplier and pipe_name not in already_flushed)
+                        is_flushed = (pipe_velocity > velocity_limit_mps and flush_ratio > velocity_multiplier and pipe_not_already_flushed)
                     else:
                         is_flushed = (pipe_velocity > velocity_limit_mps and flush_ratio > velocity_multiplier)
                 else:
@@ -490,11 +514,13 @@ def run_water_network_model(
                     qualifying_pipes.append(pipe_name)
                     already_flushed.add(pipe_name)
 
+                    if not pipe_not_already_flushed:
+                        pipe_count += 1
+
                     # Only continue through the network when the pipe exceeds
                     # the velocity limit.
                     if other_node_name not in visited_nodes:
                         nodes_to_visit.append(other_node_name)
-                        pipe_count += 1
 
         return qualifying_pipes
 
@@ -507,10 +533,10 @@ def run_water_network_model(
             operation_name,
             hydrant_node_ids,
             already_flushed=None,
-            velocity_multiplier=3.0,
-            minimum_flush_velocity_fps=5.0,
-            volume_turnovers=3.0,
-            pipes_to_reflush=1,
+            velocity_multiplier=DEFAULT_START_TO_FLUSH_VELOCITY_RATIO,
+            minimum_flush_velocity_fps=DEFAULT_MIN_FLUSH_VELOCITY_FPS,
+            volume_turnovers=DEFAULT_VOLUME_TURNOVERS,
+            pipes_to_reflush=DEFAULT_PIPES_TO_REFLUSH,
             timestep=None):
 
         
@@ -569,7 +595,7 @@ def run_water_network_model(
                 return None
             if not math.isfinite(velocity_value):
                 return None
-            return float(velocity_value * M_TO_FT)
+            return float(velocity_value * METERS_TO_FEET)
 
         operation_results["pipe_velocity_fps"] = {
             pipe_id: velocity_to_fps(flush_velocity_mps.get(pipe_id))
@@ -579,9 +605,6 @@ def run_water_network_model(
         flushed_pipes = []
         
         for hydrant_node_id in hydrant_node_ids:
-            print(f'Sequence: {sequence_name}')
-            print(f'Operation: {operation_name}')
-            print(f'Hydrant: {hydrant_node_id}')
             if hydrant_node_id not in wn.node_name_list:
                 operation_results["trace_stops"].append({
                     "hydrant_node": hydrant_node_id,
@@ -605,14 +628,14 @@ def run_water_network_model(
             if len(flushed_pipes) > 0:
                 for pipe_id in flushed_pipes:
                     flush_velocity = (
-                        float(flush_velocity_mps.get(pipe_id)) * M_TO_FT
+                        float(flush_velocity_mps.get(pipe_id)) * METERS_TO_FEET
                     )
                     base_velocity = (
-                        float(base_velocity_mps.get(pipe_id)) * M_TO_FT
+                        float(base_velocity_mps.get(pipe_id)) * METERS_TO_FEET
                     )
-                    flow_gpm = (
-                        float(flush_flowrate_m3s.get(pipe_id)) * M3S_TO_GPM
-                    )
+                    flow_gpm = float(
+                        flush_flowrate_m3s.get(pipe_id)
+                    ) * CUBIC_METERS_PER_SECOND_TO_GALLONS_PER_MINUTE
                     
                     pipe = wn.get_link(pipe_id)
         
@@ -625,7 +648,9 @@ def run_water_network_model(
                     )
                     pipe_volume_m3 = cross_section_area_m2 * length_m
         
-                    pipe_volume_gal = pipe_volume_m3 * M3_TO_GAL
+                    pipe_volume_gal = (
+                        pipe_volume_m3 * CUBIC_METERS_TO_GALLONS
+                    )
         
                     if base_velocity > 0.0:
                         velocity_ratio = flush_velocity / base_velocity
@@ -646,10 +671,10 @@ def run_water_network_model(
                     )
         
                     operation_results["pipe_diameter_in"].append(
-                        round(diameter_m * M_TO_IN, 1)
+                        round(diameter_m * METERS_TO_INCHES, 1)
                     )
                     operation_results["pipe_length_ft"].append(
-                        round(length_m * M_TO_FT, 1)
+                        round(length_m * METERS_TO_FEET, 1)
                     )
                     operation_results["pipe_volume_gal"].append(
                         round(pipe_volume_gal, 1)
@@ -694,7 +719,9 @@ def run_water_network_model(
     if progress_callback:
         progress_callback(15, "Baseline simulation complete. Preparing operations...")
 
-    base_velocity = base_results.link['velocity'].transpose() * 3.28084
+    base_velocity = (
+        base_results.link["velocity"].transpose() * METERS_TO_FEET
+    )
     base_velocity.columns = ['velocity']
 
     total_operations = sum(
@@ -703,9 +730,11 @@ def run_water_network_model(
     completed_operations = 0
 
     for sequence in sequences:
-        for previous_sequence_results in results_dict.values():
-            for previous_operation_result in previous_sequence_results.values():
-                previously_flushed_pipes = previous_operation_result.get(
+        for seq_name in model_store['results_dict']:
+            if seq_name == sequence['name']:
+                break
+            for op_name in model_store['results_dict'][seq_name]:
+                previously_flushed_pipes = model_store['results_dict'][seq_name][op_name].get(
                     "flushed_pipes", []
                 )
                 if isinstance(previously_flushed_pipes, (list, tuple, set)):
@@ -804,7 +833,9 @@ def run_water_network_model(
             }
 
             emitter_coefficient = (
-                28.35 * (operation_orifice_diam ** 2) / 13293.8648
+                ORIFICE_EMITTER_COEFFICIENT_NUMERATOR
+                * (operation_orifice_diam ** 2)
+                / ORIFICE_EMITTER_COEFFICIENT_DENOMINATOR
             )
 
             for valve in valves_to_close:
@@ -881,7 +912,7 @@ def run_water_network_model(
                 for pipe_id in operation_results["flushed_pipes"]:
                     pipe_diameter_in = float(
                         seq_wn.get_link(pipe_id).diameter
-                    ) * M_TO_IN
+                    ) * METERS_TO_INCHES
                     if pipe_diameter_in > max_flush_diam:
                         warnings.append({
                             "check": "Maximum flush diameter",
@@ -921,7 +952,7 @@ def run_water_network_model(
                             ),
                         })
 
-                psi_per_meter = 0.433527504 * M_TO_FT
+                psi_per_meter = PSI_PER_FOOT_OF_WATER * METERS_TO_FEET
                 flush_node_pressure = _get_node_result_row(
                     seq_results, "pressure"
                 )

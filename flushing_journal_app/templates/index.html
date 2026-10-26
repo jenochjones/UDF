@@ -24,7 +24,9 @@
                 <div id="sequenceLoaderStatus" class="toolbar-upload-status"></div>
                 <div class="sequence-toolbar">
                     <button id="loadSequencesBtn" class="sequence-action-button" type="button">Load Sequence</button>
-                    <button id="addSequenceBtn" class="sequence-action-button" type="button">+ Add Sequence</button>
+                    <button id="renameActiveSequenceBtn" class="sequence-action-button sequence-icon-action" type="button" aria-label="Rename selected sequence" title="Rename selected sequence" disabled>✎</button>
+                    <button id="addSequenceBtn" class="sequence-action-button sequence-icon-action" type="button" aria-label="Add sequence below selected sequence" title="Add sequence below selected sequence">+</button>
+                    <button id="deleteActiveSequenceBtn" class="sequence-action-button sequence-icon-action sequence-delete-action" type="button" aria-label="Delete selected sequence" title="Delete selected sequence" disabled>−</button>
                 </div>
                 <div class="sequence-content">
                     <div id="sequenceTabs" class="sequence-tabs"></div>
@@ -42,15 +44,15 @@
                     <span class="toolbar-section-kicker">Model Defaults</span>
                 </div>
                 <div class="toolbar-upload-block toolbar-layer-block">
-                    <div class="option-readout"><span class="toolbar-label">Model timestep</span><output id="modelTimestepValue" class="toolbar-value">0 hour</output></div>
-                    <div class="option-readout"><span class="toolbar-label">Lateral diameter</span><output id="lateralDiamValue" class="toolbar-value">5.99 in</output></div>
-                    <div class="option-readout"><span class="toolbar-label">Lateral roughness</span><output id="lateralRoughnessValue" class="toolbar-value">1.0</output></div>
+                    <div class="option-readout"><span class="toolbar-label">Model timestep</span><output id="modelTimestepValue" class="toolbar-value">{{ project_defaults.flush_options.model_timestep }} hour</output></div>
+                    <div class="option-readout"><span class="toolbar-label">Lateral diameter</span><output id="lateralDiamValue" class="toolbar-value">{{ project_defaults.connection_options.lateral_diameter_in }} in</output></div>
+                    <div class="option-readout"><span class="toolbar-label">Lateral roughness</span><output id="lateralRoughnessValue" class="toolbar-value">{{ project_defaults.connection_options.lateral_roughness }}</output></div>
                     <!--<div class="option-readout"><span class="toolbar-label">Hydrant search distance</span><output id="searchDistValue" class="toolbar-value">120 ft</output></div>-->
                     
                     <div class="toolbar-spacer"></div>
                     
                     <label class="toolbar-label" for="defaultOrificeDiamInput">Default orifice diameter (in)</label>
-                    <input id="defaultOrificeDiamInput" class="toolbar-input" type="number" min="0.01" step="0.01" value="2.5" required />
+                    <input id="defaultOrificeDiamInput" class="toolbar-input" type="number" min="0.01" step="0.01" value="{{ project_defaults.flush_options.default_orifice_diam }}" required />
                     
                 </div>
 
@@ -59,13 +61,13 @@
                 </div>
                 <div class="toolbar-upload-block toolbar-layer-block">
                     <label class="toolbar-label" for="startVelToFlushingVelRatioInput">Start-to-flush velocity ratio</label>
-                    <input id="startVelToFlushingVelRatioInput" class="toolbar-input" type="number" min="0.01" step="any" value="3.0" required />
+                    <input id="startVelToFlushingVelRatioInput" class="toolbar-input" type="number" min="0.01" step="any" value="{{ project_defaults.flush_options.start_vel_to_flushing_vel_ratio }}" required />
                     <label class="toolbar-label" for="minFlushVelInput">Min flush velocity (fps)</label>
-                    <input id="minFlushVelInput" class="toolbar-input" type="number" min="0.01" step="any" value="5.0" required />
+                    <input id="minFlushVelInput" class="toolbar-input" type="number" min="0.01" step="any" value="{{ project_defaults.flush_options.min_flush_vel }}" required />
                     <label class="toolbar-label" for="volumeTurnoversInput">Volume turnovers</label>
-                    <input id="volumeTurnoversInput" class="toolbar-input" type="number" min="0.01" step="any" value="3.0" required />
+                    <input id="volumeTurnoversInput" class="toolbar-input" type="number" min="0.01" step="any" value="{{ project_defaults.flush_options.volume_turnovers }}" required />
                     <label class="toolbar-label" for="pipesToReflushInput">Pipes to Reflush</label>
-                    <input id="pipesToReflushInput" class="toolbar-input" type="number" min="0" step="1" value="1" required />
+                    <input id="pipesToReflushInput" class="toolbar-input" type="number" min="0" step="1" value="{{ project_defaults.flush_options.pipes_to_reflush }}" required />
                 </div>
 
                 <div class="toolbar-section-heading">
@@ -73,15 +75,15 @@
                 </div>
                 <div class="toolbar-upload-block toolbar-layer-block">
                     <label class="toolbar-label" for="minResPresInput">Min residual pressure (psi)</label>
-                    <input id="minResPresInput" class="toolbar-input" type="number" min="0" step="0.1" value="20" required />
+                    <input id="minResPresInput" class="toolbar-input" type="number" min="0" step="0.1" value="{{ project_defaults.flush_options.min_res_pres }}" required />
                     <!--<label class="toolbar-label" for="presDropWarningLimitInput">Pressure drop warning limit (psi)</label>-->
                     <!--<input id="presDropWarningLimitInput" class="toolbar-input" type="number" min="0" step="0.1" value="50.0" required />-->
                     <label class="toolbar-label" for="maxFlushVelInput">Max flush velocity (fps)</label>
-                    <input id="maxFlushVelInput" class="toolbar-input" type="number" min="0" step="0.1" value="10.0" required />
+                    <input id="maxFlushVelInput" class="toolbar-input" type="number" min="0" step="0.1" value="{{ project_defaults.flush_options.max_flush_vel }}" required />
                     <label class="toolbar-label" for="maxFlushLengthInput">Max flush length (ft)</label>
-                    <input id="maxFlushLengthInput" class="toolbar-input" type="number" min="0" step="1" value="5280" required />
+                    <input id="maxFlushLengthInput" class="toolbar-input" type="number" min="0" step="1" value="{{ project_defaults.flush_options.max_flush_length }}" required />
                     <label class="toolbar-label" for="maxFlushDiamInput">Max flush diameter (in)</label>
-                    <input id="maxFlushDiamInput" class="toolbar-input" type="number" min="0" step="0.1" value="20.0" required />
+                    <input id="maxFlushDiamInput" class="toolbar-input" type="number" min="0" step="0.1" value="{{ project_defaults.flush_options.max_flush_diam }}" required />
                 </div>
 
                 <div class="toolbar-section-heading">
@@ -117,7 +119,29 @@
             </div>
         </aside>
 
-        <main class="main-area">
+        <div class="workspace-area">
+            <nav class="item-action-toolbar" aria-label="Active sequence or operation actions">
+                <button id="addActiveItemBtn" class="item-action-button" type="button" aria-label="Add operation below active operation" title="Add operation below active operation" disabled>
+                    <span aria-hidden="true">+</span>
+                </button>
+                <button id="renameActiveItemBtn" class="item-action-button" type="button" aria-label="Rename active operation" title="Rename active operation" disabled>
+                    <span aria-hidden="true">✎</span>
+                </button>
+                <button id="moveActiveItemUpBtn" class="item-action-button" type="button" aria-label="Move active operation up" title="Move active operation up" disabled>
+                    <span aria-hidden="true">↑</span>
+                </button>
+                <button id="moveActiveItemDownBtn" class="item-action-button" type="button" aria-label="Move active operation down" title="Move active operation down" disabled>
+                    <span aria-hidden="true">↓</span>
+                </button>
+                <button id="renumberOperationsBtn" class="item-action-button" type="button" aria-label="Renumber operations in current sequence" title="Renumber operations in current sequence" disabled>
+                    <span aria-hidden="true">#</span>
+                </button>
+                <button id="deleteActiveItemBtn" class="item-action-button item-action-delete" type="button" aria-label="Delete active operation" title="Delete active operation" disabled>
+                    <span aria-hidden="true">−</span>
+                </button>
+            </nav>
+
+            <main class="main-area">
             <div id="map">
                 <div id="sequencePlayback" class="sequence-playback" aria-label="Sequence results playback">
                     <div id="sequencePlaybackLabel" class="sequence-playback-label">Run a sequence to view results</div>
@@ -168,7 +192,8 @@
                     </div>
                 </div>
             </div>
-        </main>
+            </main>
+        </div>
     </div>
 
     <div id="projectStartupModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="projectStartupTitle">
@@ -251,11 +276,11 @@
             <p class="modal-copy">Set the lateral properties and maximum distance for connecting hydrants to the model network.</p>
             <div class="hydrant-connection-options">
                 <label class="modal-label" for="connectLateralDiameterInput">Lateral diameter (in)</label>
-                <input id="connectLateralDiameterInput" class="modal-input" type="number" min="0.01" step="0.01" value="5.99" />
+                <input id="connectLateralDiameterInput" class="modal-input" type="number" min="0.01" step="0.01" value="{{ project_defaults.connection_options.lateral_diameter_in }}" />
                 <label class="modal-label" for="connectLateralRoughnessInput">Lateral roughness</label>
-                <input id="connectLateralRoughnessInput" class="modal-input" type="number" min="0.01" step="0.01" value="1.0" />
+                <input id="connectLateralRoughnessInput" class="modal-input" type="number" min="0.01" step="0.01" value="{{ project_defaults.connection_options.lateral_roughness }}" />
                 <label class="modal-label" for="connectHydrantSearchDistanceInput">Hydrant search distance (ft)</label>
-                <input id="connectHydrantSearchDistanceInput" class="modal-input" type="number" min="0" step="0.1" value="120.0" />
+                <input id="connectHydrantSearchDistanceInput" class="modal-input" type="number" min="0" step="0.1" value="{{ project_defaults.connection_options.search_distance_ft }}" />
             </div>
             <div class="modal-progress-block">
                 <div class="modal-progress-label">Progress</div>
@@ -277,7 +302,7 @@
             <h3 id="valveSnapTitle">Snap valves</h3>
             <p class="modal-copy">Snap valves to the closest pipe only when they are within the selected distance.</p>
             <label class="modal-label" for="valveSnapDistanceInput">Maximum snap distance (ft)</label>
-            <input id="valveSnapDistanceInput" class="modal-input" type="number" min="0" step="any" value="120" required />
+            <input id="valveSnapDistanceInput" class="modal-input" type="number" min="0" step="any" value="{{ project_defaults.valve_snap_distance_ft }}" required />
             <div class="modal-progress-block">
                 <div class="modal-progress-label">Progress</div>
                 <div class="modal-progress-track">
@@ -338,7 +363,7 @@
             <label class="modal-label" for="epsgInput">EPSG Code</label>
             <input id="epsgInput" class="modal-input" type="text" value="26912" placeholder="26912 or EPSG:26912" />
                 <label class="modal-label" for="epsgTimestepInput">Run to timestep (hours)</label>
-                <input id="epsgTimestepInput" class="modal-input" type="number" min="0" max="23.75" step="0.25" value="0" />
+                <input id="epsgTimestepInput" class="modal-input" type="number" min="0" max="23.75" step="0.25" value="{{ project_defaults.flush_options.model_timestep }}" />
             <div id="epsgModalError" class="modal-error" aria-live="polite"></div>
             <div id="modelSetupProgress" class="modal-progress-block hidden" aria-live="polite">
                 <div class="modal-progress-label">Model setup progress</div>
@@ -395,7 +420,7 @@
             <label class="modal-label" for="operationVolumeTurnoversInput">Volume turnovers</label>
             <input id="operationVolumeTurnoversInput" class="modal-input" type="number" min="0.01" step="any" placeholder="Use project default" />
             <label class="modal-label" for="operationPipesToReflushInput">Pipes to Reflush</label>
-            <input id="operationPipesToReflushInput" class="modal-input" type="number" min="0" step="1" placeholder="Use project default (1)" />
+            <input id="operationPipesToReflushInput" class="modal-input" type="number" min="0" step="1" placeholder="Use project default ({{ project_defaults.flush_options.pipes_to_reflush }})" />
             <div id="operationOptionsError" class="modal-error" aria-live="polite"></div>
             <div class="modal-actions">
                 <button id="cancelOperationOptionsModal" class="modal-button secondary" type="button">Cancel</button>
@@ -420,6 +445,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script>window.PROJECT_DEFAULTS = {{ project_defaults|tojson }};</script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 
