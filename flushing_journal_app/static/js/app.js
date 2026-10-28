@@ -9,6 +9,7 @@ let flushingZonesLabelsVisible = false;
 let flushingZonesDrawControl = null;
 let pendingModelFile = null;
 let modelLoaded = false;
+let currentModelCrs = null;
 let hydrantsLoaded = false;
 let valvesLoaded = false;
 let selectedValveMarker = null;
@@ -2414,6 +2415,7 @@ function buildPipeDiameterLegend() {
 
 function initializeModelUpload() {
     const loadModelBtn = document.getElementById("loadModelBtn");
+    const replaceModelBtn = document.getElementById("replaceModelBtn");
     const modal = document.getElementById("epsgModal");
     const closeBtn = document.getElementById("closeEpsgModal");
     const cancelBtn = document.getElementById("cancelEpsgModal");
@@ -2427,6 +2429,12 @@ function initializeModelUpload() {
 
     if (loadModelBtn) {
         loadModelBtn.addEventListener("click", async function () {
+            await selectModelFile();
+        });
+    }
+
+    if (replaceModelBtn) {
+        replaceModelBtn.addEventListener("click", async function () {
             await selectModelFile();
         });
     }
@@ -3149,7 +3157,11 @@ function showEpsgModal(file) {
     }
 
     epsgError.textContent = "";
-    epsgInput.value = "26912";
+    epsgInput.value = currentModelCrs || "26912";
+    const timestepInput = document.getElementById("epsgTimestepInput");
+    if (timestepInput) {
+        timestepInput.value = String(selectedModelHour);
+    }
     document.getElementById("modelSetupProgress")?.classList.add("hidden");
     const progressTrack = document.querySelector("#modelSetupProgress [role='progressbar']");
     progressTrack?.classList.remove("is-indeterminate");
@@ -3200,6 +3212,9 @@ async function submitModelFile(
     }
 
     const loadModelBtn = document.getElementById("loadModelBtn");
+    const replaceModelBtn = document.getElementById("replaceModelBtn");
+    const wasModelLoaded = modelLoaded;
+    let uploadSucceeded = false;
     const formData = new FormData();
 
     formData.append("inp_file", file);
@@ -3226,6 +3241,7 @@ async function submitModelFile(
 
     modelUploadInProgress = true;
     if (loadModelBtn) loadModelBtn.disabled = true;
+    if (replaceModelBtn) replaceModelBtn.disabled = true;
     if (confirmBtn) confirmBtn.disabled = true;
     if (cancelBtn) cancelBtn.disabled = true;
     if (closeBtn) closeBtn.disabled = true;
@@ -3270,20 +3286,61 @@ async function submitModelFile(
             xhr.send(formData);
         });
 
-        updateProgress(100, "Model setup complete.");
-        displayModelPipes(data.pipe_geojson);
-        setModelStatus(`Loaded ${data.pipe_count} pipes from model.`, false);
+        uploadSucceeded = true;
         modelLoaded = true;
+        currentModelCrs = data.model_crs;
+        window.lastWaterNetworkResults = {};
+        renderSequences(currentSequences, "Model updated. Previous run results and warnings were cleared.");
+        setSequencePlaybackResults(currentSequences, {});
+        if (data.options && window.setUsedOptions) {
+            window.setUsedOptions(data.options);
+        } else if (data.model_timestep !== undefined && data.model_timestep !== null) {
+            window.setUsedOptions({ model_timestep: data.model_timestep });
+        }
+
+        displayModelPipes(data.pipe_geojson);
         updateConnectHydrantsButtonState();
 
+        if (wasModelLoaded && hydrantsLoaded) {
+            updateProgress(85, "Reconnecting hydrants to the new model...", true);
+            setModelStatus("Reconnecting hydrants to the new model...", false);
+            const progressInterval = startProgressPolling("modelSetupProgressBar", "hydrants");
+            try {
+                const response = await fetch("/connect_hydrants", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ connection_options: getHydrantConnectionOptions() })
+                });
+                const connectionData = await response.json();
+                if (!response.ok || !connectionData.success) {
+                    throw new Error(connectionData.message || "Failed to reconnect hydrants to the new model.");
+                }
+                displayModelPipes(connectionData.pipe_geojson);
+                if (connectionData.connection_options && window.setUsedOptions) {
+                    window.setUsedOptions({ connection_options: connectionData.connection_options });
+                }
+                updateProgress(100, connectionData.message || "Hydrants reconnected. Base model regenerated.");
+            } finally {
+                clearInterval(progressInterval);
+            }
+        } else {
+            updateProgress(100, "Base model regenerated.");
+        }
+
+        setModelStatus(
+            wasModelLoaded && hydrantsLoaded
+                ? `Loaded ${data.pipe_count} pipes; hydrants reconnected and base model regenerated.`
+                : `Loaded ${data.pipe_count} pipes from model.`,
+            false
+        );
         await new Promise((resolve) => setTimeout(resolve, 350));
         if (modal) modal.classList.add("hidden");
         const timestepInput = document.getElementById("epsgTimestepInput");
         if (timestepInput) {
-            timestepInput.value = String(projectDefaults.flush_options.model_timestep);
+            timestepInput.value = String(selectedModelHour);
         }
         const epsgInput = document.getElementById("epsgInput");
-        if (epsgInput) epsgInput.value = "6625";
+        if (epsgInput) epsgInput.value = currentModelCrs;
 
         if (shouldOpenHydrantWizard) {
             shouldOpenHydrantWizard = false;
@@ -3292,27 +3349,25 @@ async function submitModelFile(
             }, 150);
         }
 
-        // Keep the read-only options summary aligned with the uploaded model.
-        try {
-            if (data.options) {
-                window.setUsedOptions(data.options);
-            } else if (data.model_timestep !== undefined && data.model_timestep !== null) {
-                window.setUsedOptions({ model_timestep: data.model_timestep });
-            }
-        } catch (e) {
-            console.warn('Failed to update options timestep from server response', e);
-        }
     } catch (error) {
         console.error(error);
         updateProgress(0, error.message || "Model setup failed.");
         if (epsgError) epsgError.textContent = error.message || "Model setup failed.";
-        setModelStatus(error.message, true);
-        modelLoaded = false;
+        setModelStatus(
+            uploadSucceeded
+                ? `New model loaded, but setup did not finish: ${error.message}`
+                : error.message,
+            true
+        );
+        modelLoaded = uploadSucceeded || wasModelLoaded;
         updateConnectHydrantsButtonState();
     } finally {
         modelUploadInProgress = false;
         if (loadModelBtn) {
             loadModelBtn.disabled = false;
+        }
+        if (replaceModelBtn) {
+            replaceModelBtn.disabled = false;
         }
         if (confirmBtn) confirmBtn.disabled = false;
         if (cancelBtn) cancelBtn.disabled = false;

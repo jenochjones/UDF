@@ -193,8 +193,11 @@ def upload_model():
         set_model_paths(base_model_path)
         MODEL_STORE["model_dir"] = project_dir
         MODEL_STORE["generated_inp_files"] = []
+        MODEL_STORE["running_model"] = None
         MODEL_STORE["results_dict"] = {}
         MODEL_STORE["results_path"] = None
+        MODEL_STORE["snapshots"] = {}
+        MODEL_STORE["element_mapping"] = {"valves": {}, "hydrants": {}}
         MODEL_STORE["model_crs"] = model_crs
         MODEL_STORE["model_time"] = model_timestep
         MODEL_STORE["pipe_geojson"] = pipe_geojson
@@ -204,6 +207,7 @@ def upload_model():
             **DEFAULT_FLUSH_OPTIONS,
             "model_timestep": model_timestep,
         }
+        set_operation_progress("sequences", 0, "Waiting to start…", done=True)
         response = {
             "success": True,
             "message": "Model loaded successfully.",
