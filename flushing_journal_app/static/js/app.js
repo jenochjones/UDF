@@ -58,7 +58,7 @@ document.addEventListener("DOMContentLoaded", function () {
     initializeSequencePlayback();
     initializeToolbar();
     initializeOptionsToolbar();
-    initializeModelUpload();
+    initializeModelImport();
     initializeLayerUpload();
     initializeSequenceDialogs();
     initializeItemActionToolbar();
@@ -712,39 +712,6 @@ function initializeProjectStartupFlow() {
     }
 }
 
-function showProjectStartupModal() {
-    const startupModal = document.getElementById("projectStartupModal");
-    if (startupModal) {
-        startupModal.classList.remove("hidden");
-    }
-}
-
-async function openNewProjectSetupDialog() {
-    const fileInput = document.createElement("input");
-    fileInput.type = "file";
-    fileInput.accept = ".inp";
-    fileInput.style.display = "none";
-
-    document.body.appendChild(fileInput);
-
-    const file = await new Promise((resolve) => {
-        fileInput.addEventListener("change", function () {
-            resolve(fileInput.files[0]);
-        }, { once: true });
-
-        fileInput.click();
-    });
-
-    document.body.removeChild(fileInput);
-
-    if (!file) {
-        showProjectStartupModal();
-        return;
-    }
-
-    showEpsgModal(file);
-}
-
 function showLayerWizardModal(layerType) {
     const modal = document.getElementById("layerWizardModal");
     const title = document.getElementById("layerWizardTitle");
@@ -1226,10 +1193,8 @@ function initializeSequenceDialogs() {
                 throw new Error(data.message || 'Failed to send sequences to the backend.');
             }
 
-            window.lastWaterNetworkResults = {
-                ...(window.lastWaterNetworkResults || {}),
-                ...(data.results_dict || {})
-            };
+            // The server returns the authoritative results; discard anything from earlier runs.
+            window.lastWaterNetworkResults = data.results_dict || {};
             updateOperationWarningIndicators();
             setSequencePlaybackResults(
                 currentSequences,
@@ -1384,19 +1349,22 @@ function updateItemActionToolbar() {
     const hasActiveOperation = Boolean(operationLocation);
 
     if (addButton) {
-        addButton.disabled = !hasActiveOperation;
+        addButton.disabled = !activeSequence;
     }
     if (renameButton) {
         renameButton.disabled = !hasActiveOperation;
     }
     if (moveUpButton) {
-        moveUpButton.disabled = !operationLocation
-            || operationLocation.operationIndex <= 0;
+        moveUpButton.disabled = operationLocation
+            ? operationLocation.operationIndex <= 0
+            : !activeSequence || activeSequenceIndex <= 0;
     }
     if (moveDownButton) {
-        moveDownButton.disabled = !operationLocation
-            || operationLocation.operationIndex
-                >= activeSequence.operations.length - 1;
+        moveDownButton.disabled = operationLocation
+            ? operationLocation.operationIndex
+                >= activeSequence.operations.length - 1
+            : !activeSequence
+                || activeSequenceIndex >= currentSequences.length - 1;
     }
     if (renumberButton) {
         renumberButton.disabled = !activeSequence
@@ -1458,6 +1426,8 @@ function initializeItemActionToolbar() {
                     operationLocation.sequenceIndex,
                     operationLocation.operationIndex + 1
                 );
+            } else if (currentSequences[activeSequenceIndex]) {
+                addOperation(activeSequenceIndex);
             }
         }
     );
@@ -1491,6 +1461,8 @@ function initializeItemActionToolbar() {
                     operationLocation.sequenceIndex,
                     operationLocation.operationIndex
                 );
+            } else if (currentSequences[activeSequenceIndex]) {
+                moveSequenceUp(activeSequenceIndex);
             }
         }
     );
@@ -1504,6 +1476,8 @@ function initializeItemActionToolbar() {
                     operationLocation.sequenceIndex,
                     operationLocation.operationIndex
                 );
+            } else if (currentSequences[activeSequenceIndex]) {
+                moveSequenceDown(activeSequenceIndex);
             }
         }
     );
@@ -2015,17 +1989,15 @@ function clearSequencePlayback({ preserveToggleState = false } = {}) {
     activePlaybackStep = -1;
     const playbackFilter = document.getElementById("sequencePlaybackFilter");
     if (playbackFilter && !preserveToggleState) {
-        playbackFilter.checked = false;
         playbackFilter.disabled = true;
     }
     const showVelocities = document.getElementById("sequencePlaybackVelocities");
     if (showVelocities && !preserveToggleState) {
-        showVelocities.checked = false;
         showVelocities.disabled = true;
     }
-    if (!preserveToggleState) {
-        document.getElementById("sequenceVelocityLegend")?.classList.add("hidden");
-    }
+    // Checkbox state is intentionally retained so it survives reruns and re-renders.
+    document.getElementById("sequenceVelocityLegend")
+        ?.classList.toggle("hidden", !showVelocities?.checked);
     document.querySelectorAll(".animation-current").forEach((element) => {
         element.classList.remove("animation-current");
     });
@@ -2412,9 +2384,7 @@ function buildPipeDiameterLegend() {
     `;
 }
 
-function initializeModelUpload() {
-    const loadModelBtn = document.getElementById("loadModelBtn");
-    const replaceModelBtn = document.getElementById("replaceModelBtn");
+function initializeModelImport() {
     const modal = document.getElementById("epsgModal");
     const closeBtn = document.getElementById("closeEpsgModal");
     const cancelBtn = document.getElementById("cancelEpsgModal");
@@ -2424,18 +2394,6 @@ function initializeModelUpload() {
 
     if (!modal || !closeBtn || !cancelBtn || !confirmBtn || !epsgInput || !epsgError) {
         return;
-    }
-
-    if (loadModelBtn) {
-        loadModelBtn.addEventListener("click", async function () {
-            await selectModelFile();
-        });
-    }
-
-    if (replaceModelBtn) {
-        replaceModelBtn.addEventListener("click", async function () {
-            await selectModelFile();
-        });
     }
 
     closeBtn.addEventListener("click", hideEpsgModal);
@@ -2477,7 +2435,91 @@ function initializeModelUpload() {
     });
 }
 
+function setBaseModelStatus(message, isError) {
+    const statusDiv = document.getElementById("baseModelStatus");
+    if (!statusDiv) {
+        return;
+    }
+    statusDiv.textContent = message;
+    statusDiv.classList.toggle("error", Boolean(isError));
+}
+
+function initializeBaseModelButtons() {
+    const downloadBtn = document.getElementById("downloadBaseModelBtn");
+    const uploadBtn = document.getElementById("uploadBaseModelBtn");
+
+    downloadBtn?.addEventListener("click", async function () {
+        try {
+            const response = await fetch("/download_base_model");
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.message || "Failed to download base model.");
+            }
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "BaseModel.inp";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            setBaseModelStatus("Base model downloaded.", false);
+        } catch (error) {
+            console.error(error);
+            setBaseModelStatus(error.message, true);
+        }
+    });
+
+    uploadBtn?.addEventListener("click", async function () {
+        if (!modelLoaded) {
+            setBaseModelStatus("Load a model before uploading a base model.", true);
+            return;
+        }
+
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = ".inp";
+        fileInput.style.display = "none";
+        document.body.appendChild(fileInput);
+        const file = await new Promise((resolve) => {
+            fileInput.addEventListener("change", () => resolve(fileInput.files[0]), { once: true });
+            fileInput.addEventListener("cancel", () => resolve(null), { once: true });
+            fileInput.click();
+        });
+        document.body.removeChild(fileInput);
+        if (!file) {
+            return;
+        }
+
+        uploadBtn.disabled = true;
+        setBaseModelStatus("Uploading base model...", false);
+        try {
+            const formData = new FormData();
+            formData.append("inp_file", file);
+            const response = await fetch("/replace_base_model", { method: "POST", body: formData });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || "Failed to upload base model.");
+            }
+
+            window.lastWaterNetworkResults = {};
+            renderSequences(currentSequences, "Base model replaced. Previous run results and warnings were cleared.");
+            setSequencePlaybackResults(currentSequences, {});
+            displayModelPipes(data.pipe_geojson);
+            updateConnectHydrantsButtonState();
+            setBaseModelStatus(`Base model replaced (${data.pipe_count} pipes). Results and warnings cleared.`, false);
+        } catch (error) {
+            console.error(error);
+            setBaseModelStatus(error.message, true);
+        } finally {
+            uploadBtn.disabled = false;
+        }
+    });
+}
+
 function initializeOptionsToolbar() {
+    initializeBaseModelButtons();
     const optionInputs = {
         default_orifice_diam: "defaultOrificeDiamInput",
         start_vel_to_flushing_vel_ratio: "startVelToFlushingVelRatioInput",
@@ -3157,9 +3199,6 @@ async function submitModelFile(
         return;
     }
 
-    const loadModelBtn = document.getElementById("loadModelBtn");
-    const replaceModelBtn = document.getElementById("replaceModelBtn");
-    const wasModelLoaded = modelLoaded;
     let uploadSucceeded = false;
     const formData = new FormData();
 
@@ -3186,8 +3225,6 @@ async function submitModelFile(
     };
 
     modelUploadInProgress = true;
-    if (loadModelBtn) loadModelBtn.disabled = true;
-    if (replaceModelBtn) replaceModelBtn.disabled = true;
     if (confirmBtn) confirmBtn.disabled = true;
     if (cancelBtn) cancelBtn.disabled = true;
     if (closeBtn) closeBtn.disabled = true;
@@ -3236,7 +3273,7 @@ async function submitModelFile(
         modelLoaded = true;
         currentModelCrs = data.model_crs;
         window.lastWaterNetworkResults = {};
-        renderSequences(currentSequences, "Model updated. Previous run results and warnings were cleared.");
+        renderSequences(currentSequences, "Model loaded. Previous run results and warnings were cleared.");
         setSequencePlaybackResults(currentSequences, {});
         if (data.options && window.setUsedOptions) {
             window.setUsedOptions(data.options);
@@ -3246,39 +3283,8 @@ async function submitModelFile(
 
         displayModelPipes(data.pipe_geojson);
         updateConnectHydrantsButtonState();
-
-        if (wasModelLoaded && hydrantsLoaded) {
-            updateProgress(85, "Reconnecting hydrants to the new model...", true);
-            setModelStatus("Reconnecting hydrants to the new model...", false);
-            const progressInterval = startProgressPolling("modelSetupProgressBar", "hydrants");
-            try {
-                const response = await fetch("/connect_hydrants", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ connection_options: getHydrantConnectionOptions() })
-                });
-                const connectionData = await response.json();
-                if (!response.ok || !connectionData.success) {
-                    throw new Error(connectionData.message || "Failed to reconnect hydrants to the new model.");
-                }
-                displayModelPipes(connectionData.pipe_geojson);
-                if (connectionData.connection_options && window.setUsedOptions) {
-                    window.setUsedOptions({ connection_options: connectionData.connection_options });
-                }
-                updateProgress(100, connectionData.message || "Hydrants reconnected. Base model regenerated.");
-            } finally {
-                clearInterval(progressInterval);
-            }
-        } else {
-            updateProgress(100, "Base model regenerated.");
-        }
-
-        setModelStatus(
-            wasModelLoaded && hydrantsLoaded
-                ? `Loaded ${data.pipe_count} pipes; hydrants reconnected and base model regenerated.`
-                : `Loaded ${data.pipe_count} pipes from model.`,
-            false
-        );
+        updateProgress(100, "Base model ready.");
+        setModelStatus(`Loaded ${data.pipe_count} pipes from model.`, false);
         await new Promise((resolve) => setTimeout(resolve, 350));
         if (modal) modal.classList.add("hidden");
         const timestepInput = document.getElementById("epsgTimestepInput");
@@ -3301,20 +3307,14 @@ async function submitModelFile(
         if (epsgError) epsgError.textContent = error.message || "Model setup failed.";
         setModelStatus(
             uploadSucceeded
-                ? `New model loaded, but setup did not finish: ${error.message}`
+                ? `Model loaded, but setup did not finish: ${error.message}`
                 : error.message,
             true
         );
-        modelLoaded = uploadSucceeded || wasModelLoaded;
+        modelLoaded = uploadSucceeded;
         updateConnectHydrantsButtonState();
     } finally {
         modelUploadInProgress = false;
-        if (loadModelBtn) {
-            loadModelBtn.disabled = false;
-        }
-        if (replaceModelBtn) {
-            replaceModelBtn.disabled = false;
-        }
         if (confirmBtn) confirmBtn.disabled = false;
         if (cancelBtn) cancelBtn.disabled = false;
         if (closeBtn) closeBtn.disabled = false;
@@ -3683,6 +3683,32 @@ function updateOperationWarningIndicators() {
             (window.lastWaterNetworkResults || {})[sequence.name] || {};
         const operationResult = sequenceResults[operationName] || {};
         const warnings = operationResult.warnings;
+
+        let downloadButton = titleGroup.querySelector(
+            ".sequence-operation-download"
+        );
+        if (operationResult.inp_filename) {
+            if (!downloadButton) {
+                downloadButton = document.createElement("button");
+                downloadButton.type = "button";
+                downloadButton.className = "sequence-operation-download";
+                downloadButton.textContent = "⬇";
+                downloadButton.title = "Download this operation's simulation INP file";
+                downloadButton.setAttribute("aria-label", downloadButton.title);
+                downloadButton.addEventListener("click", function (event) {
+                    event.stopPropagation();
+                    const params = new URLSearchParams({
+                        sequence: sequence.name,
+                        operation: operationName
+                    });
+                    window.location.href = `/download_operation_inp?${params}`;
+                });
+                titleGroup.appendChild(downloadButton);
+            }
+        } else {
+            downloadButton?.remove();
+        }
+
         let warningButton = titleGroup.querySelector(
             ".sequence-operation-warning"
         );

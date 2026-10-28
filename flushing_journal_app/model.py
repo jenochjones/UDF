@@ -1003,6 +1003,7 @@ def run_water_network_model(
                     #    })
 
                 operation_results["warnings"] = warnings
+                operation_results["inp_filename"] = inp_filename
 
                 results_dict[sequence["name"]][operation["name"]] = (
                     operation_results

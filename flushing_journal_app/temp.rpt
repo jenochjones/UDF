@@ -1,0 +1,82 @@
+  Page 1                                    Wed Oct 28 16:12:47 2026
+
+  ******************************************************************
+  *                           E P A N E T                          *
+  *                   Hydraulic and Water Quality                  *
+  *                   Analysis for Pipe Networks                   *
+  *                         Version 2.2                            *
+  ******************************************************************
+  
+  Analysis begun Wed Oct 28 16:12:48 2026
+
+   
+  Hydraulic Status:
+  -----------------------------------------------------------------------
+     0:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 1.253455
+              PRV PRV_400N-Z3 switched from active to open
+              PRV PRV_Z3-Z2_1600S switched from active to open
+              PRV PRV_Z3-Z2_850N1800E switched from active to open
+              Trial  2: relative flow change = 0.418464
+              PRV PRV_MAPLE-Z2_LOWERTANK switched from active to open
+              PRV PRV_Z2-Z1_1600S switched from active to closed
+              PRV PRV_Z2-Z1_400S switched from active to closed
+              PRV PRV_Z2-Z1_HARMONYSOUTH switched from active to closed
+              PRV PRV_Z2-Z1_LOWERTWINHOLLOW switched from active to closed
+              PRV PRV_Z3-Z2_BENCH switched from active to closed
+              FCV CONTROL_MAPLEBENCH switched from active to open
+              Trial  3: relative flow change = 0.577941
+              PRV PRV_Z3-Z2_BENCH switched from closed to active
+              PRV PRV_Z3-Z2_EAGLECOURT switched from active to open
+              PRV PRV_Z3-Z2_VILLAGE switched from active to open
+              Trial  4: relative flow change = 0.396510
+              PRV PRV_MAPLE-Z2_LOWERTANK switched from open to active
+              PRV PRV_Z3-Z2_1600S switched from open to active
+              PRV PRV_Z3-Z2_EAGLECOURT switched from open to active
+              PRV PRV_Z3-Z2_VILLAGE switched from open to active
+              Trial  5: relative flow change = 0.198915
+              PRV PRV_Z3-Z2_BENCH switched from active to closed
+              Trial  6: relative flow change = 0.051001
+              PRV PRV_Z3-Z2_1600S switched from active to open
+              PRV PRV_Z3-Z2_BENCH switched from closed to active
+              Trial  7: relative flow change = 0.097665
+              Trial  8: relative flow change = 0.069333
+              Trial  9: relative flow change = 0.014545
+              Trial 10: relative flow change = 0.006493
+              Trial 11: relative flow change = 0.000941
+                        maximum  flow change = 17.9651 for Link P3111_d32eb8
+                        maximum  head error  = 0.0028 for Link P3077_45b87e
+
+     0:00:00: Balanced after 11 trials
+     0:00:00: Reservoir RES_SEALWELL is closed
+     0:00:00: Reservoir RES_CARNESECCAWELL is closed
+     0:00:00: Reservoir RES_WESTWOODWELL is emptying
+     0:00:00: Reservoir RES_CROWD is emptying
+     0:00:00: Reservoir SPR_MAPLECANYON_SPRINGS is emptying
+     0:00:00: Tank T3_LOWERTANK is filling at 10.00 ft
+     0:00:00: Tank T1_MAPLE1 is emptying at 14.01 ft
+     0:00:00: Tank T2_MAPLE2 is emptying at 14.17 ft
+     0:00:00: Tank T4_WESTWOOD is closed at 15.00 ft
+     0:00:00: Tank T5_CROWD is emptying at 16.95 ft
+     0:00:00: FCV CONTROL_MAPLEBENCH open but cannot deliver flow
+     0:00:00: PRV PRV_400N-Z3 open
+     0:00:00: PRV PRV_Z2-Z1_1600S closed
+     0:00:00: PRV PRV_Z2-Z1_400S closed
+     0:00:00: PRV PRV_Z2-Z1_HARMONYSOUTH closed
+     0:00:00: PRV PRV_Z2-Z1_LOWERTWINHOLLOW closed
+     0:00:00: PRV PRV_Z3-Z2_1600S open
+     0:00:00: PRV PRV_Z3-Z2_850N1800E open
+   
+  WARNING: Negative pressures at 0:00:00 hrs.
+  WARNING: FCV CONTROL_MAPLEBENCH open but cannot deliver flow at 0:00:00 hrs.
+  WARNING: Node J1726 disconnected at 0:00:00 hrs
+  WARNING: Node J426 disconnected at 0:00:00 hrs
+  WARNING: Node J474 disconnected at 0:00:00 hrs
+  WARNING: Node J478 disconnected at 0:00:00 hrs
+  WARNING: Node J480 disconnected at 0:00:00 hrs
+  WARNING: System disconnected because of Link P587
+  WARNING: System disconnected because of Link P2203-1200E
+  WARNING: System disconnected because of Link P1647
+   
+  Analysis ended Wed Oct 28 16:12:48 2026

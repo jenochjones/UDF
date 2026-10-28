@@ -1032,6 +1032,18 @@ select:focus-visible {
     right: 0;
 }
 
+.sequence-operation-download {
+    background: none;
+    border: none;
+    color: #0b5cab;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.sequence-operation-download:hover {
+    color: #00970d;
+}
+
 .sequence-operation-warning:hover {
     color:#00970d;
 }

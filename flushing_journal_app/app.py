@@ -8,6 +8,7 @@ import json
 import math
 import os
 import re
+import shutil
 import tempfile
 import traceback
 import uuid
@@ -245,6 +246,121 @@ def model_pipes():
         )
 
     return jsonify({"success": True, "pipe_geojson": MODEL_STORE["pipe_geojson"]})
+
+
+@app.route("/download_base_model", methods=["GET"])
+def download_base_model():
+    inp_path = MODEL_STORE.get("inp_path")
+    if not inp_path or not os.path.exists(inp_path):
+        return (
+            jsonify({"success": False, "message": "No base model has been loaded yet."}),
+            404,
+        )
+
+    return send_file(
+        inp_path,
+        mimetype="text/plain",
+        as_attachment=True,
+        download_name="BaseModel.inp",
+    )
+
+
+@app.route("/download_operation_inp", methods=["GET"])
+def download_operation_inp():
+    sequence_name = request.args.get("sequence", "")
+    operation_name = request.args.get("operation", "")
+    operation_result = (
+        MODEL_STORE.get("results_dict", {}).get(sequence_name, {}).get(operation_name)
+    )
+    inp_filename = (operation_result or {}).get("inp_filename")
+    if not inp_filename:
+        inp_filename = None
+    inp_path = None
+    for path in MODEL_STORE.get("generated_inp_files") or []:
+        if inp_filename and os.path.basename(path) == inp_filename:
+            inp_path = path
+            break
+    if not inp_path or not os.path.isfile(inp_path):
+        return (
+            jsonify({"success": False, "message": "No simulation INP file is available for this operation."}),
+            404,
+        )
+
+    return send_file(
+        inp_path,
+        mimetype="text/plain",
+        as_attachment=True,
+        download_name=inp_filename,
+    )
+
+
+@app.route("/replace_base_model", methods=["POST"])
+def replace_base_model():
+    """
+    Replace the stored base model with a user-modified copy, refresh the pipe
+    GeoJSON, and clear any existing results.
+    """
+
+    source_path = None
+    try:
+        inp_path = MODEL_STORE.get("inp_path")
+        model_crs = MODEL_STORE.get("model_crs")
+        if not inp_path or not model_crs:
+            return (
+                jsonify({"success": False, "message": "Load a model before replacing the base model."}),
+                400,
+            )
+
+        inp_file = request.files.get("inp_file")
+        if inp_file is None or inp_file.filename == "":
+            return jsonify({"success": False, "message": "No file was selected."}), 400
+
+        if not secure_filename(inp_file.filename).lower().endswith(".inp"):
+            return (
+                jsonify({"success": False, "message": "The selected file must be an EPANET .inp file."}),
+                400,
+            )
+
+        source_path = os.path.join(
+            app.config["UPLOAD_FOLDER"], f"base_{uuid.uuid4().hex}.inp"
+        )
+        inp_file.save(source_path)
+
+        wn = wntr.network.WaterNetworkModel(source_path)
+        pipe_geojson = water_network_pipes_to_geojson(wn=wn, model_crs=model_crs)
+
+        shutil.copyfile(source_path, inp_path)
+
+        for path in MODEL_STORE.get("generated_inp_files") or []:
+            if path != inp_path and os.path.exists(path):
+                os.remove(path)
+        results_path = MODEL_STORE.get("results_path")
+        if results_path and os.path.exists(results_path):
+            os.remove(results_path)
+
+        MODEL_STORE["wn"] = wn
+        MODEL_STORE["pipe_geojson"] = pipe_geojson
+        MODEL_STORE["generated_inp_files"] = []
+        MODEL_STORE["running_model"] = None
+        MODEL_STORE["results_dict"] = {}
+        MODEL_STORE["results_path"] = None
+        MODEL_STORE["snapshots"] = {}
+        set_operation_progress("sequences", 0, "Waiting to start…", done=True)
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Base model replaced. Existing results and warnings were cleared.",
+                "pipe_count": len(pipe_geojson.get("features", [])),
+                "pipe_geojson": pipe_geojson,
+            }
+        )
+    except Exception as exc:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "message": str(exc)}), 500
+    finally:
+        if source_path and os.path.exists(source_path):
+            os.remove(source_path)
 
 
 @app.route("/download_project", methods=["GET"])
@@ -1725,10 +1841,9 @@ def run_sequence():
         MODEL_STORE["sequences"] = updated_sequences
 
         stored_results = dict(MODEL_STORE.get("results_dict", {}))
+        # A rerun replaces the sequence's results so stale operations are dropped.
         for sequence_name, sequence_results in results_dict.items():
-            merged_sequence_results = dict(stored_results.get(sequence_name, {}))
-            merged_sequence_results.update(sequence_results)
-            stored_results[sequence_name] = merged_sequence_results
+            stored_results[sequence_name] = sequence_results
         save_project_results(stored_results)
         set_operation_progress(
             "sequences", 100, "Sequence run completed.", done=True
