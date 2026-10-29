@@ -1295,7 +1295,23 @@ function showConfirmDialog(message) {
 }
 
 async function saveSequencesToServer() {
-    const requestBody = JSON.stringify({ sequences: currentSequences });
+    const payload = { sequences: currentSequences };
+    try {
+        if (window.getFlushOptions) {
+            payload.options = window.getFlushOptions();
+            const connection = getHydrantConnectionOptions();
+            payload.connection_options = connection;
+        }
+        const snapInput = document.getElementById("valveSnapDistanceInput");
+        if (snapInput && snapInput.checkValidity() && Number.isFinite(snapInput.valueAsNumber)) {
+            payload.valve_snap_distance_ft = snapInput.valueAsNumber;
+        }
+    } catch (error) {
+        // Invalid in-progress option values are not saved; the sequences still are.
+        delete payload.options;
+        delete payload.connection_options;
+    }
+    const requestBody = JSON.stringify(payload);
     const pendingSave = sequenceSaveQueue.then(async () => {
         const response = await fetch('/save_sequences', {
             method: 'POST',
@@ -1813,6 +1829,11 @@ function initializeToolbar() {
 
     if (downloadProjectBtn) {
         downloadProjectBtn.addEventListener("click", downloadProjectZip);
+    }
+
+    const downloadDashboardBtn = document.getElementById("downloadDashboardBtn");
+    if (downloadDashboardBtn) {
+        downloadDashboardBtn.addEventListener("click", downloadDashboardHtml);
     }
 
     if (uploadProjectBtn) {
@@ -2750,6 +2771,7 @@ async function uploadFlushingZones() {
             select.disabled = false;
             const toggle = document.getElementById("flushingZonesLabelsToggle");
             toggle.disabled = false;
+            renderFlushingZoneNames();
             setLayerStatus("flushingZones", `Loaded ${data.feature_count} flushing zone polygons.`, false);
         } catch (error) { setLayerStatus("flushingZones", error.message, true); }
     };
@@ -2773,6 +2795,50 @@ function refreshFlushingZoneLabel(feature, layer) {
 
 function refreshFlushingZoneLabels() {
     flushingZonesLayer?.eachLayer(layer => refreshFlushingZoneLabel(layer.feature, layer));
+    renderFlushingZoneNames();
+}
+
+function renderFlushingZoneNames() {
+    const container = document.getElementById("flushingZoneNames");
+    if (!container) return;
+    container.replaceChildren();
+    const status = document.getElementById("flushingZoneNamesStatus");
+    const field = document.getElementById("flushingZonesFieldSelect")?.value;
+    const layers = flushingZonesLayer ? flushingZonesLayer.getLayers() : [];
+    if (!layers.length) return;
+    if (!field) {
+        if (status) status.textContent = "Select a polygon label field to rename zones.";
+        return;
+    }
+    if (status) status.textContent = "";
+
+    layers.forEach((layer, index) => {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "toolbar-input";
+        input.value = layer.feature?.properties?.[field] ?? "";
+        input.setAttribute("aria-label", `Flushing zone ${index + 1} name`);
+        input.addEventListener("change", async () => {
+            const previous = layer.feature?.properties?.[field] ?? "";
+            try {
+                const response = await fetch("/rename_flushing_zone", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ index, name: input.value })
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.message || "Could not rename zone.");
+                layer.feature.properties[field] = data.name;
+                input.value = data.name;
+                refreshFlushingZoneLabel(layer.feature, layer);
+                if (status) status.textContent = "";
+            } catch (error) {
+                input.value = previous;
+                if (status) status.textContent = error.message;
+            }
+        });
+        container.appendChild(input);
+    });
 }
 
 async function downloadProjectZip() {
@@ -2817,6 +2883,49 @@ async function downloadProjectZip() {
             projectStatus.textContent = error.message;
             projectStatus.classList.add("error");
         }
+    }
+}
+
+async function downloadDashboardHtml() {
+    const projectStatus = document.getElementById("projectLoadStatus") || document.getElementById("projectImportStatus");
+    const button = document.getElementById("downloadDashboardBtn");
+    if (button) button.disabled = true;
+    if (projectStatus) {
+        projectStatus.textContent = "Generating dashboard...";
+        projectStatus.classList.remove("error");
+    }
+
+    try {
+        if (!await saveSequencesToServer()) {
+            throw new Error("Could not save the latest operation options before generating the dashboard.");
+        }
+
+        const response = await fetch("/download_dashboard", { method: "GET" });
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.message || "Failed to generate dashboard.");
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "flushing_dashboard.html";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        if (projectStatus) projectStatus.textContent = "Dashboard ready.";
+    } catch (error) {
+        console.error(error);
+        if (projectStatus) {
+            projectStatus.textContent = error.message;
+            projectStatus.classList.add("error");
+        }
+        alert(error.message);
+    } finally {
+        if (button) button.disabled = false;
     }
 }
 

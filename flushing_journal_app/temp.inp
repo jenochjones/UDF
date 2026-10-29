@@ -1,6 +1,6 @@
-; Filename: C:\Users\ejones\AppData\Local\Temp\flushing_journal_uploads\flushing_journal_project_lg3zo_tm\BaseModel.inp
+; Filename: C:\Users\ejones\AppData\Local\Temp\flushing_journal_uploads\run_16812_18a8a87a\flushing_journal_project_cte4o75_\BaseModel.inp
 ; WNTR: 1.5.0
-; Created: 2026-10-29 11:07:07
+; Created: 2026-10-29 15:50:23
 [TITLE]
 
 [JUNCTIONS]
@@ -3718,10 +3718,10 @@
  P1459                J1192                H338_CONN               236.20095599               8               1               0                 Open   ;
  P1461                J1202                H402_CONN               36.043892053               6               1               0                 Open   ;
  P1463                J1594                H565_CONN               179.11776035              12               1               0                 Open   ;
- P1465                J1188                H318_CONN               417.13995075              12               1               0               Closed   ;
+ P1465                J1188                H318_CONN               417.13995075              12               1               0                 Open   ;
  P1467                J370                 J1188                       4.940643              12               1               0                 Open   ;
  P1469                J1196                H317_CONN               271.07946024              12               1               0                 Open   ;
- P147                 J1714                H397_CONN               306.25783342              12               1               0               Closed   ;
+ P147                 J1714                H397_CONN               306.25783342              12               1               0                 Open   ;
  P1471                J1200                J1218                     180.192301              12               1               0                 Open   ;
  P1473                J1230                J1228                     144.739637               8               1               0                 Open   ;
  P1477                J1232                H105_CONN               126.40458452               8               1               0                 Open   ;
@@ -3895,7 +3895,7 @@
  P1825                J664                 J654                       14.652817              12               1               0                 Open   ;
  P1827                J706                 H274_CONN               176.80908543               8               1               0                 Open   ;
  P1829                J704                 J706                         84.9105               8               1               0                 Open   ;
- P183                 J248                 J254                       251.19689               6               1               0               Closed   ;
+ P183                 J248                 J254                       251.19689               6               1               0                 Open   ;
  P1831                J720                 J730                       19.327064               8               1               0                 Open   ;
  P1833                J974                 J454                      372.483793              12               1               0                 Open   ;
  P1835                J574                 J578                      531.103527              12               1               0                 Open   ;
@@ -4039,7 +4039,7 @@
  P2089                J1678                J798                      109.725578              12               1               0                 Open   ;
  P209                 J294                 J2616                     653.342233               8               1               0                 Open   ;
  P2091                J1680                J790                      233.974906               8               1               0                 Open   ;
- P2093                J1680                H536_CONN               352.24678805               8               1               0                 Open   ;
+ P2093                J1680                H536_CONN               352.24678805               8               1               0               Closed   ;
  P2095                J1682                J842                        364.6439               8               1               0                 Open   ;
  P2097                J1682                J770                      251.056004              12               1               0                 Open   ;
  P2099                J1684                H545_CONN                315.4834091               8               1               0                 Open   ;
@@ -4053,7 +4053,7 @@
  P2111                J1690                H393_CONN                47.99957019               8               1               0                 Open   ;
  P2113                J1690                J358                       11.995097               8               1               0                 Open   ;
  P2117                J1692                H435_CONN               35.241929336               8               1               0                 Open   ;
- P2119                J240                 J250                       11.919194               6               1               0               Closed   ;
+ P2119                J240                 J250                       11.919194               6               1               0                 Open   ;
  P2121                J248                 J244                       36.593074               6               1               0                 Open   ;
  P2123                J1694                H382_CONN               6.8001364971              12               1               0                 Open   ;
  P2125-1600S          PRV_Z3-Z2_1600S_ND   J1696                        4.33919              12               1               0                 Open   ;
@@ -4242,7 +4242,7 @@
  P2485                J1970                J1642                     178.726544               8               1               0                 Open   ;
  P2487                J1974                H546_CONN               68.187027056               8               1               0                 Open   ;
  P2489                J1972                J1974                      57.851428               8               1               0                 Open   ;
- P249                 J360                 H334_CONN               558.30759482               8               1               0               Closed   ;
+ P249                 J360                 H334_CONN               558.30759482               8               1               0                 Open   ;
  P2491                J1976                J1428                     238.214913               8               1               0                 Open   ;
  P2493                J1978                J1980                     168.626355               8               1               0                 Open   ;
  P2495                J1980                J1982                     293.818534               8               1               0                 Open   ;
@@ -4415,7 +4415,7 @@
  P2805                J2230                J2228                     315.619079               8               1               0                 Open   ;
  P2807                J2222                J2232                     495.756528              12               1               0                 Open   ;
  P2809                J2232                H832_CONN               72.224873824              12               1               0                 Open   ;
- P281                 J414                 J422                      126.597709               8               1               0               Closed   ;
+ P281                 J414                 J422                      126.597709               8               1               0                 Open   ;
  P2811                J2232                J2236                     198.745057               8               1               0                 Open   ;
  P2813                J2224                H791_CONN               389.80773396               8               1               0                 Open   ;
  P2815                J2224                J2240                     102.737259               8               1               0                 Open   ;
@@ -4844,14 +4844,14 @@
  P495                 J752                 J754                       342.14196               6               1               0                 Open   ;
  P497                 J756                 J762                      264.309336               8               1               0                 Open   ;
  P499                 J760                 H119_CONN               1.1534010105               6               1               0                 Open   ;
- P501                 J764                 J1678                      458.81884               8               1               0                 Open   ;
+ P501                 J764                 J1678                      458.81884               8               1               0               Closed   ;
  P505                 J768                 H1029_CONN              383.51887015               8               1               0                 Open   ;
  P507                 J772                 J774                      251.401857               8               1               0                 Open   ;
  P511                 J1658                H531_CONN               183.24463675               8               1               0                 Open   ;
  P513                 J778                 H533_CONN               123.55582938               8               1               0                 Open   ;
  P515                 J782                 H534_CONN               93.222981299               8               1               0                 Open   ;
  P517                 J786                 J788                       82.977655               8               1               0                 Open   ;
- P519                 J790                 H537_CONN               261.19149582               8               1               0                 Open   ;
+ P519                 J790                 H537_CONN               261.19149582               8               1               0               Closed   ;
  P521                 J794                 J1680                       127.8087               8               1               0                 Open   ;
  P523                 J798                 H528_CONN               274.44945506               8               1               0                 Open   ;
  P525                 J802                 H540_CONN               331.00406299              12               1               0                 Open   ;
@@ -4872,7 +4872,7 @@
  P565                 J856                 H550_CONN               265.18884791               6               1               0                 Open   ;
  P567                 J860                 H551_CONN               17.981982254               8               1               0                 Open   ;
  P569                 J862                 H553_CONN               158.83893476               8               1               0                 Open   ;
- P57                  J72                  J390                       17.281888               8               1               0               Closed   ;
+ P57                  J72                  J390                       17.281888               8               1               0                 Open   ;
  P571                 J864                 H1006_CONN              210.37902739               8               1               0                 Open   ;
  P573                 J866                 H557_CONN                174.4620102               8               1               0                 Open   ;
  P575                 J870                 H555_CONN               371.49415074               8               1               0                 Open   ;
@@ -5009,7 +5009,7 @@
  P817                 J1252                J1254                      36.138839              12               1               0                 Open   ;
  P819                 J1256                J1258                       33.14813              12               1               0                 Open   ;
  P821                 J1260                J1262                      33.929291              12               1               0                 Open   ;
- P823                 J1264                H573_CONN               448.81706044               8               1               0                 Open   ;
+ P823                 J1264                H573_CONN               448.81706044               8               1               0               Closed   ;
  P825                 J1266                H572_CONN               80.075273584               8               1               0                 Open   ;
  P829                 J1272                J1274                     828.762826              18               1               0                 Open   ;
  P83                  J116                 H130_CONN               38.249100653               8               1               0                 Open   ;
@@ -6108,7 +6108,7 @@
  H526_pipe_6dec23     H526                 H526_CONN               53.062905962               6               1               0                 Open   ;
  P1567_d22eec         H527_CONN            H524_CONN               388.20005631               8               1               0                 Open   ;
  H527_pipe_0f8d4a     H527                 H527_CONN               77.158975144               6               1               0                 Open   ;
- P523_75adea          H528_CONN            J796                    425.05469994               8               1               0                 Open   ;
+ P523_75adea          H528_CONN            J796                    425.05469994               8               1               0               Closed   ;
  H528_pipe_cbf408     H528                 H528_CONN               87.969980911               6               1               0                 Open   ;
  P1979_ce5232         H529_CONN            J802                    90.314837706              12               1               0                 Open   ;
  H529_pipe_2f5fbb     H529                 H529_CONN               74.994901606               6               1               0                 Open   ;
@@ -6191,7 +6191,7 @@
  P437_39a1fa          H568_CONN            J1566                    436.2567637              12               1               0                 Open   ;
  H568_pipe_edad5b     H568                 H568_CONN               101.84173341               6               1               0                 Open   ;
  H569_pipe_809ade     H569                 J1244                   156.47738739               6               1               0                 Open   ;
- P1991_1fe7c6         H570_CONN            J1262                   83.325064109              12               1               0                 Open   ;
+ P1991_1fe7c6         H570_CONN            J1262                   83.325064109              12               1               0               Closed   ;
  H570_pipe_87e3af     H570                 H570_CONN               24.442057763               6               1               0                 Open   ;
  P825_b1032e          H571_CONN            J1268                   351.33342746               8               1               0                 Open   ;
  H571_pipe_fc6a21     H571                 H571_CONN               196.31680284               6               1               0                 Open   ;
@@ -7357,7 +7357,7 @@ DEMAND CHARGE          0.0000
 
 [EMITTERS]
 ;ID        Flow coefficient
-H180       177.18749992172766
+H570       255.14999988728783
 
 [QUALITY]
 

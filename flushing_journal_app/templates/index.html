@@ -118,7 +118,9 @@
                     <label class="toolbar-label" for="flushingZonesFieldSelect">Polygon label field</label>
                     <select id="flushingZonesFieldSelect" class="toolbar-input" disabled><option value="">Upload a shapefile to select a field</option></select>
                     <label class="toolbar-label"><input id="flushingZonesLabelsToggle" type="checkbox" disabled> Show polygon labels</label>
-                </div>
+                                        <div id="flushingZoneNamesStatus" class="toolbar-upload-status" aria-live="polite"></div>
+                                        <div id="flushingZoneNames" class="flushing-zone-names"></div>
+                                    </div>
             </div>
         </aside>
 
@@ -191,6 +193,9 @@
                         </button>
                         <button id="downloadProjectBtn" class="project-toolbar-button project-toolbar-save" type="button" aria-label="Save project as zip" title="Save project as zip">
                             <span aria-hidden="true">💾</span>
+                        </button>
+                        <button id="downloadDashboardBtn" class="project-toolbar-button project-toolbar-save" type="button" aria-label="Generate and download HTML dashboard" title="Generate and download HTML dashboard">
+                            <span aria-hidden="true">📊</span>
                         </button>
                     </div>
                 </div>

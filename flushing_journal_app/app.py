@@ -8,6 +8,9 @@ import json
 import math
 import os
 import re
+import atexit
+import signal
+import time
 import shutil
 import tempfile
 import traceback
@@ -36,8 +39,54 @@ from model import build_steady_state_from_timestep, run_water_network_model
 app = Flask(__name__)
 
 # Spyder-friendly hard-coded settings
-UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), "flushing_journal_uploads")
+UPLOAD_ROOT = os.path.join(tempfile.gettempdir(), "flushing_journal_uploads")
+os.makedirs(UPLOAD_ROOT, exist_ok=True)
+STALE_UPLOAD_AGE_SECONDS = 24 * 60 * 60
+
+
+def purge_stale_uploads(root, max_age_seconds):
+    """Remove leftovers from earlier runs that were killed before they could clean up."""
+    cutoff = time.time() - max_age_seconds
+    for entry in os.scandir(root):
+        try:
+            if entry.stat().st_mtime >= cutoff:
+                continue
+            if entry.is_dir(follow_symlinks=False):
+                shutil.rmtree(entry.path, ignore_errors=True)
+            else:
+                os.remove(entry.path)
+        except OSError:
+            pass
+
+
+purge_stale_uploads(UPLOAD_ROOT, STALE_UPLOAD_AGE_SECONDS)
+
+# Each server process writes only inside its own folder, so cleanup can never
+# touch files that belong to another running instance.
+UPLOAD_FOLDER = os.path.join(UPLOAD_ROOT, f"run_{os.getpid()}_{uuid.uuid4().hex[:8]}")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+def cleanup_upload_folder():
+    if os.path.dirname(os.path.abspath(UPLOAD_FOLDER)) == os.path.abspath(UPLOAD_ROOT):
+        shutil.rmtree(UPLOAD_FOLDER, ignore_errors=True)
+
+
+atexit.register(cleanup_upload_folder)
+
+
+def _handle_termination(signum, frame):
+    cleanup_upload_folder()
+    raise SystemExit(0)
+
+
+for _signal_name in ("SIGTERM", "SIGBREAK"):
+    _signal = getattr(signal, _signal_name, None)
+    if _signal is not None:
+        try:
+            signal.signal(_signal, _handle_termination)
+        except (ValueError, OSError):
+            pass  # Not on the main thread or unsupported here.
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
@@ -1576,6 +1625,25 @@ def set_flushing_zone_label_field():
     return jsonify({"success": True, "field": layer["label_field"]})
 
 
+@app.route("/rename_flushing_zone", methods=["POST"])
+def rename_flushing_zone():
+    layer = MODEL_STORE["uploaded_layers"].get("flushing_zones")
+    payload = request.get_json(silent=True) or {}
+    if not layer or not layer.get("label_field"):
+        return jsonify({"success": False, "message": "Select a polygon label field first."}), 400
+    features = (layer.get("geojson") or {}).get("features", [])
+    index = payload.get("index")
+    if not isinstance(index, int) or isinstance(index, bool) or not 0 <= index < len(features):
+        return jsonify({"success": False, "message": "Invalid flushing zone."}), 400
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        return jsonify({"success": False, "message": "Zone name cannot be empty."}), 400
+    if features[index].get("properties") is None:
+        features[index]["properties"] = {}
+    features[index]["properties"][layer["label_field"]] = name
+    return jsonify({"success": True, "name": name})
+
+
 @app.route("/upload_sequences", methods=["POST"])
 def upload_sequences():
     """
@@ -1682,6 +1750,24 @@ def save_sequences():
             )
 
         MODEL_STORE["sequences"] = sequences
+
+        # Keep the project-level options in sync so they are exported with the project.
+        flush_options = data.get("options")
+        if isinstance(flush_options, dict):
+            MODEL_STORE["flush_options"] = {
+                **MODEL_STORE.get("flush_options", {}),
+                **make_json_serializable(flush_options),
+            }
+        snap_distance = data.get("valve_snap_distance_ft")
+        if isinstance(snap_distance, (int, float)) and not isinstance(snap_distance, bool):
+            if math.isfinite(snap_distance) and snap_distance >= 0:
+                MODEL_STORE["valve_snap_distance_ft"] = float(snap_distance)
+        connection_options = data.get("connection_options")
+        if isinstance(connection_options, dict):
+            MODEL_STORE["connection_options"] = {
+                **MODEL_STORE.get("connection_options", {}),
+                **make_json_serializable(connection_options),
+            }
 
         return jsonify({"success": True, "message": "Sequences saved."})
     except Exception as exc:
@@ -2471,6 +2557,29 @@ def restore_project_archive(project_file):
                         parse_sequence_text(text, os.path.basename(member_name))
                     )
 
+        # Older projects stored the custom options only in the run results.
+        global_options = MODEL_STORE.get("flush_options", {})
+        for sequence in sequences:
+            sequence_results = results_dict.get(sequence.get("name"))
+            if not isinstance(sequence_results, dict):
+                continue
+            for operation in sequence["operations"]:
+                if operation.get("options"):
+                    continue
+                used = (sequence_results.get(str(operation.get("name"))) or {}).get("options")
+                if not isinstance(used, dict):
+                    continue
+                custom = {
+                    key: value
+                    for key, value in used.items()
+                    if isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and key in global_options
+                    and value != global_options.get(key)
+                }
+                if custom:
+                    operation["options"] = custom
+
         MODEL_STORE["sequences"] = sequences
 
         saved_mapping = meta.get("element_mapping")
@@ -2517,6 +2626,148 @@ def send_project_archive():
         as_attachment=True,
         download_name="flushing_journal_project.zip",
     )
+
+
+def _round_coordinates(coords, digits=6):
+    if isinstance(coords, (list, tuple)) and coords and isinstance(coords[0], (int, float)):
+        return [round(float(value), digits) for value in coords[:2]]
+    return [_round_coordinates(item, digits) for item in coords]
+
+
+def _layer_points(layer_name):
+    layer = MODEL_STORE["uploaded_layers"].get(layer_name)
+    if not layer or not layer.get("geojson"):
+        return []
+
+    id_field = layer.get("id_field")
+    points = []
+    for feature in layer["geojson"].get("features", []):
+        geometry = feature.get("geometry") or {}
+        properties = feature.get("properties") or {}
+        coordinates = geometry.get("coordinates")
+        if geometry.get("type") != "Point" or not coordinates or len(coordinates) < 2:
+            continue
+        feature_id = None
+        for field in (id_field, "ASSETID", "id", "ID"):
+            if field and properties.get(field) is not None and str(properties[field]).strip():
+                feature_id = str(properties[field]).strip()
+                break
+        if feature_id is None:
+            continue
+        points.append(
+            {
+                "id": feature_id,
+                "x": round(float(coordinates[0]), 6),
+                "y": round(float(coordinates[1]), 6),
+            }
+        )
+    return points
+
+
+def build_dashboard_data():
+    results_dict = MODEL_STORE.get("results_dict") or {}
+    sequences = MODEL_STORE.get("sequences") or []
+    if not sequences or not results_dict:
+        raise ValueError("Run the sequences before generating a dashboard.")
+    if not MODEL_STORE.get("pipe_geojson"):
+        raise ValueError("No model is loaded to export.")
+
+    pipes = []
+    for feature in MODEL_STORE["pipe_geojson"].get("features", []):
+        geometry = feature.get("geometry") or {}
+        if geometry.get("type") != "LineString":
+            continue
+        pipes.append(
+            {
+                "id": str((feature.get("properties") or {}).get("id")),
+                "c": _round_coordinates(geometry.get("coordinates", [])),
+            }
+        )
+
+    zones_layer = MODEL_STORE["uploaded_layers"].get("flushing_zones")
+    zones = None
+    if zones_layer and zones_layer.get("geojson"):
+        label_field = zones_layer.get("label_field")
+        zones = {
+            "labelField": label_field,
+            "features": [
+                {
+                    "geometry": {
+                        "type": (feature.get("geometry") or {}).get("type"),
+                        "coordinates": _round_coordinates(
+                            (feature.get("geometry") or {}).get("coordinates", [])
+                        ),
+                    },
+                    "properties": (
+                        {label_field: (feature.get("properties") or {}).get(label_field)}
+                        if label_field
+                        else {}
+                    ),
+                }
+                for feature in zones_layer["geojson"].get("features", [])
+                if (feature.get("geometry") or {}).get("type") in ("Polygon", "MultiPolygon")
+            ],
+        }
+
+    dashboard_sequences = []
+    for sequence in sequences:
+        sequence_results = results_dict.get(sequence.get("name"), {})
+        operations = []
+        for operation in sequence.get("operations", []):
+            result = sequence_results.get(str(operation.get("name")), {}) or {}
+            flows = result.get("flush_pipe_flow_gpm") or []
+            operations.append(
+                {
+                    "name": str(operation.get("name")),
+                    "close": [str(v).strip() for v in operation.get("close_valves") or [] if str(v).strip()],
+                    "open": [str(v).strip() for v in operation.get("open_valves") or [] if str(v).strip()],
+                    "hydrants": [str(h).strip() for h in operation.get("open_hydrants") or [] if str(h).strip()],
+                    "pipes": [str(p) for p in result.get("flushed_pipes") or []],
+                    "time": result.get("total_flush_time_min"),
+                    "volume": result.get("total_flush_volume_gal"),
+                    "flow": (sum(flows) / len(flows)) if flows else None,
+                    "notes": {},
+                }
+            )
+        dashboard_sequences.append({"name": str(sequence.get("name")), "ops": operations})
+
+    return {
+        "title": "Flushing Dashboard",
+        "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "pipes": pipes,
+        "hydrants": _layer_points("hydrants"),
+        "valves": _layer_points("valves"),
+        "zones": zones,
+        "sequences": dashboard_sequences,
+    }
+
+
+def create_dashboard_html():
+    template_path = os.path.join(app.root_path, "templates", "dashboard_template.html")
+    with open(template_path, "r", encoding="utf-8") as template_file:
+        template = template_file.read()
+
+    data_json = json.dumps(
+        make_json_serializable(build_dashboard_data()), allow_nan=False
+    ).replace("</", "<\\/")
+    return template.replace("__DASHBOARD_DATA__", data_json)
+
+
+@app.route("/download_dashboard", methods=["GET"])
+def download_dashboard():
+    try:
+        html = create_dashboard_html()
+        return send_file(
+            io.BytesIO(html.encode("utf-8")),
+            mimetype="text/html",
+            as_attachment=True,
+            download_name="flushing_dashboard.html",
+        )
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    except Exception as exc:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 def get_uploaded_layer_response(layer):

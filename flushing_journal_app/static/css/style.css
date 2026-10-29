@@ -1745,3 +1745,4 @@ select:focus-visible {
         grid-template-columns: 1.05in 7.55in 6.05in 2.35in;
     }
 }
+.flushing-zone-names { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; margin-top: 6px; }
