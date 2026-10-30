@@ -29,6 +29,8 @@ import zipfile
 import arcpy
 
 BASE_INP = 'inpFiles/BaseModel.inp'
+OVERVIEW_MAP_TEMPLATE = 'LayersOverview'
+OVERVIEW_LAYOUT_TEMPLATE = 'FlushingJournalOverviewTemplate'
 HYD_STATUS_FLD, HYD_MIN_FLD, TIME_FLD = 'STATUS', 'MINUTES', 'TIME'
 SYMBOLOGY = {  # layers in the project that hold the symbology
     'valves': 'ValvesSymbology',
@@ -38,10 +40,14 @@ SYMBOLOGY = {  # layers in the project that hold the symbology
 
 
 def get_param(index, default=None):
-    value = arcpy.GetParameterAsText(index) if arcpy.GetArgumentCount() > index else ''
-    if not value and len(sys.argv) > index + 1:
+    """Value of tool parameter `index`; blank optional parameters (empty or '#') give `default`."""
+    value = ''
+    if arcpy.GetArgumentCount() > index:
+        value = arcpy.GetParameterAsText(index)
+    elif len(sys.argv) > index + 1:
         value = sys.argv[index + 1]
-    return value if value else default
+    value = (value or '').strip()
+    return default if value in ('', '#') else value
 
 
 def message(text):
@@ -333,10 +339,10 @@ def label_valves(layer):
             lc.visible = False
 
 
-def label_hydrants(layer):
+def label_hydrants(layer, status='Current Sequence Open'):
     layer.showLabels = True
     lc = layer.listLabelClasses()[0]
-    lc.SQLQuery = "STATUS = 'Current Sequence Open'"
+    lc.SQLQuery = f"STATUS = '{status}'"
     lc.expression = '$feature.ASSETID'
     lc.visible = True
 
@@ -355,8 +361,9 @@ def copy_item(aprx, kind, template_name, name):
     return aprx.copyItem(find(), name)
 
 
-def setup_legend(layout, frame, keep_layers):
-    """Keeps only the given layers in the legend(s) of the layout and hides their layer names."""
+def setup_legend(layout, frame, keep_layers, visible_only=False):
+    """Keeps only the given layers in the legend(s) of the layout and hides their layer names.
+    With visible_only, items only list features inside the map frame extent and headings are off."""
     keep = {l.name for l in keep_layers}
     for legend in layout.listElements('LEGEND_ELEMENT'):
         try:
@@ -370,9 +377,76 @@ def setup_legend(layout, frame, keep_layers):
             cim = legend.getDefinition('V3')
             for item in cim.items:
                 item.showLayerName = False
+                if visible_only:
+                    item.showHeading = False
+                    item.showVisibleFeatures = True
             legend.setDefinition(cim)
         except Exception as exc:
             warn(f'Could not hide legend layer names in {layout.name} ({exc})')
+        if visible_only:
+            for item in legend.items:
+                for prop, value in (('showVisibleFeatures', True), ('showHeading', False)):
+                    try:
+                        setattr(item, prop, value)
+                    except Exception as exc:
+                        warn(f'Could not set legend {prop} for {item.name} ({exc})')
+
+
+def relabel_classes(layer, label, key):
+    """Gives every legend class of a unique-value layer the same label."""
+    try:
+        sym = layer.symbology
+        for group in sym.renderer.groups:
+            for item in group.items:
+                item.label = label
+        layer.symbology = sym
+    except Exception as exc:
+        warn(f'Could not relabel {key} legend entries ({exc})')
+
+
+def dash_effect_class():
+    """CIMGeometricEffectDashes lives in different arcpy.cim modules across Pro versions."""
+    import importlib
+    import arcpy.cim
+    cls = getattr(arcpy.cim, 'CIMGeometricEffectDashes', None)
+    if cls is not None:
+        return cls
+    for module_name in ('arcpy.cim.CIMSymbol', 'arcpy.cim.CIMVectorLayers', 'arcpy.cim.GeometricEffects',
+                        'arcpy.cim.CIMEffects', 'arcpy.cim.CIMObject'):
+        try:
+            cls = getattr(importlib.import_module(module_name), 'CIMGeometricEffectDashes', None)
+        except ImportError:
+            continue
+        if cls is not None:
+            return cls
+    raise ImportError('CIMGeometricEffectDashes was not found in arcpy.cim')
+
+
+def style_dashed_black_pipes(layer, label, width=3):
+    """Single black dashed line symbol labelled `label`."""
+    sym = layer.symbology
+    sym.updateRenderer('SimpleRenderer')
+    symbol = sym.renderer.symbol
+    symbol.color = {'RGB': [0, 0, 0, 100]}
+    symbol.size = width
+    sym.renderer.label = label
+    layer.symbology = sym
+    try:
+        dashes_cls = dash_effect_class()
+        cim = layer.getDefinition('V3')
+        for sl in cim.renderer.symbol.symbol.symbolLayers:
+            if type(sl).__name__ == 'CIMSolidStroke':
+                dashes = dashes_cls()
+                dashes.dashTemplate = [6, 4]
+                dashes.lineDashEnding = 'NoConstraint'
+                dashes.offsetAlongLine = 0
+                dashes.controlPointEnding = 'NoConstraint'
+                sl.width = width
+                sl.effects = [dashes]
+        layer.setDefinition(cim)
+    except Exception as exc:
+        warn(f'Could not apply the dashed line effect to the pipes ({exc}); solid black lines used')
+    layer.showLabels = False
 
 
 def delete_existing(aprx, name):
@@ -399,51 +473,65 @@ def overview_name(seq_name):
 
 
 def build_overview(aprx, seq_name, pipe_op, op_order, hyds, valves, notes, base, cfg,
-                   pipe_geom, hyd_geom, val_geom):
-    """One overview map + layout per sequence: zones, all operated valves/hydrants and every flushed
-    pipe colored by the operation that flushed it. Returns the number of maps created."""
+                   pipe_geom, hyd_geom, val_geom, totals):
+    """One overview map + layout per sequence, copied from the LayerOverview map and the
+    FlushingJournalOverviewTemplate layout. Returns the number of maps created."""
     name = overview_name(seq_name)
     tag = safe_name(name)
     gdb = cfg['gdb']
 
+    all_pipes_fc = copy_with_status(
+        base['pipes_base'], os.path.join(gdb, f'PipesAll_{tag}'), ['EPANET_ID', 'STATUS', 'SEQUENCE'],
+        lambda r: [r[0], 'Flushed', seq_name] if r[0] in pipe_op else None)
     pipes_fc = copy_with_status(
         base['pipes_base'], os.path.join(gdb, f'Pipes_{tag}'), ['EPANET_ID', 'STATUS', 'SEQUENCE', 'OPERATION'],
         lambda r: [r[0], 'Flushed', seq_name, pipe_op[r[0]]] if r[0] in pipe_op else None, keep_only_set=True)
     hyd_fc = copy_with_status(
         base['hyds_base'], os.path.join(gdb, f'Hydrants_{tag}'), ['ASSETID', HYD_STATUS_FLD],
-        lambda r: [r[0], 'Current Sequence Open'] if r[0] in hyds else None, keep_only_set=True)
+        lambda r: [r[0], 'Flushed'] if r[0] in hyds else None, keep_only_set=True)
     val_fc = copy_with_status(
         base['vals_base'], os.path.join(gdb, f'Valves_{tag}'), ['ASSETID', 'STATUS', 'NOTE'],
-        lambda r: [r[0], valves[r[0]], notes.get(r[0])] if r[0] in valves else None, keep_only_set=True)
+        lambda r: [r[0], 'Reopen', notes.get(r[0])] if r[0] in valves else None, keep_only_set=True)
 
     delete_existing(aprx, name)
-    ov_map = copy_item(aprx, 'map', cfg['template_map_name'], name)
+    ov_map = copy_item(aprx, 'map', cfg['overview_map_name'], name)
     zone_layer = ov_map.addDataFromPath(base['zones_fc']) if base['zones_fc'] else None
-    pipe_layer = ov_map.addDataFromPath(pipes_fc)
+    all_pipe_layer = ov_map.addDataFromPath(all_pipes_fc)
+    flushed_layer = ov_map.addDataFromPath(pipes_fc)
     valve_layer = ov_map.addDataFromPath(val_fc)
     hyd_layer = ov_map.addDataFromPath(hyd_fc)
     symb = cfg['symb_layers']
+    apply_symbology(all_pipe_layer, symb.get('pipes'), 'pipes')
     apply_symbology(valve_layer, symb.get('valves'), 'valves')
     apply_symbology(hyd_layer, symb.get('hydrants'), 'hydrants')
-    style_pipes_by_operation(pipe_layer, op_order)
+    style_dashed_black_pipes(all_pipe_layer, 'Pipes')
+    relabel_classes(valve_layer, 'Operated Valves', 'valves')
+    relabel_classes(hyd_layer, 'Flushed Hydrants', 'hydrants')
+    style_pipes_by_operation(flushed_layer, op_order)
     if zone_layer is not None:
         style_zones(zone_layer)
         zone_layer.name = 'Flushing Zones'
-    pipe_layer.name, valve_layer.name, hyd_layer.name = 'Flushed Pipes', 'Valves', 'Hydrants'
+    all_pipe_layer.name, flushed_layer.name = 'Pipes', 'Flushed Pipes'
+    valve_layer.name, hyd_layer.name = 'Valves', 'Hydrants'
+    all_pipe_layer.showLabels = False
     for lyr in ov_map.listLayers():
         if lyr.name in SYMBOLOGY.values():
             ov_map.removeLayer(lyr)
     label_valves(valve_layer)
-    label_hydrants(hyd_layer)
+    label_hydrants(hyd_layer, 'Flushed')
 
-    layout = copy_item(aprx, 'layout', cfg['template_layout_name'], name)
+    layout = copy_item(aprx, 'layout', cfg['overview_layout_name'], name)
     frame = layout.listElements('MAPFRAME_ELEMENT')[0]
     frame.map = ov_map
-    keep = [l for l in (pipe_layer, valve_layer, hyd_layer, zone_layer) if l is not None]
-    setup_legend(layout, frame, keep)
+    # the colored flushed-pipes layer is intentionally left out of the legend
+    keep = [l for l in (all_pipe_layer, valve_layer, hyd_layer, zone_layer) if l is not None]
     set_text(layout, 'UDFZONE', f'ZONE {seq_name.split("-")[0]}')
     set_text(layout, 'UDFSEQUENCE', f'SEQUENCE {seq_name} OVERVIEW')
-    set_text(layout, 'FIGURELABEL', name)
+    set_text(layout, 'FIGURELABEL', seq_name)
+    set_text(layout, 'TOTALFLUSHTIME', f"{int(round(totals['minutes']))} minutes")
+    set_text(layout, 'TOTALFLUSHVOL', f"{int(round(totals['gallons'])):,} gallons")
+    set_text(layout, 'TOTALVALVESOP', str(len(valves)))
+    set_text(layout, 'TOTALHYDOP', str(len(hyds)))
     for text_name in ('PIPELENGTH', 'PIPEVOLUME', 'VOLUMETURNOVER', 'FLUSHDURATION', 'FLOWRATE', 'AVGVEL',
                       'PREHYDRANTPSI', 'BEGINRESHYDRANT', 'ENDRESHYDRANT', 'POSTHYDRANTPSI'):
         set_text(layout, text_name, ' ')
@@ -462,6 +550,8 @@ def build_overview(aprx, seq_name, pipe_op, op_order, hyds, valves, notes, base,
         camera.setExtent(arcpy.Extent(minx - buf, miny - buf, maxx + buf, maxy + buf))
         if camera.scale < cfg['min_scale']:
             camera.scale = cfg['min_scale']
+    # set after the extent so the legend only lists features visible in the frame
+    setup_legend(layout, frame, keep, visible_only=True)
     if cfg['pdf_folder']:
         os.makedirs(cfg['pdf_folder'], exist_ok=True)
         layout.exportToPDF(os.path.join(cfg['pdf_folder'], f'{tag}.pdf'))
@@ -477,10 +567,22 @@ def main():
     buffer_dist = float(get_param(1, 300.0))
     min_scale = float(get_param(2, 1000.0))
     pdf_folder = get_param(3)
+    requested_sequences = [n.strip() for n in (get_param(4, '') or '').split(',') if n.strip()]
     symb_layers = find_symbology_layers(aprx)
 
     message(f'Reading {zip_path}')
     results, sequences, hydrants_gj, valves_gj, inp_text, meta, op_inps, zones_gj = load_zip(zip_path)
+    if requested_sequences:
+        wanted = {n.lower() for n in requested_sequences}
+        selected_sequences = [s for s in sequences if str(s['name']).strip().lower() in wanted]
+        missing = wanted - {str(s['name']).strip().lower() for s in selected_sequences}
+        for name in requested_sequences:
+            if name.lower() in missing:
+                warn(f'Sequence {name} was not found in the project; skipped')
+        if not selected_sequences:
+            raise ValueError('None of the requested sequences were found in the project')
+    else:
+        selected_sequences = list(sequences)
     model_crs = str(meta.get('model_crs', 'EPSG:6625'))
     model_sr = arcpy.SpatialReference(int(model_crs.split(':')[-1]))
     geo_sr = arcpy.SpatialReference(4326)
@@ -517,6 +619,8 @@ def main():
 
     all_labels = {f'{s["name"]}-{o["name"]}' for s in sequences for o in s.get('operations', [])}
     all_labels |= {overview_name(s['name']) for s in sequences}
+    # the overview templates are never used as the operation map/layout template
+    all_labels |= {OVERVIEW_MAP_TEMPLATE, OVERVIEW_LAYOUT_TEMPLATE}
     # skip maps/layouts generated by an earlier run so they are never used as the template
     template_map_obj = next((m for m in aprx.listMaps() if m.name not in all_labels), None)
     template_layout_obj = next((l for l in aprx.listLayouts() if l.name not in all_labels), None)
@@ -524,6 +628,14 @@ def main():
         raise ValueError('The project needs a template map and layout whose names are not operation names')
     template_map_name = template_map_obj.name
     template_layout_name = template_layout_obj.name
+    overview_map_name = OVERVIEW_MAP_TEMPLATE
+    if not any(m.name == overview_map_name for m in aprx.listMaps()):
+        warn(f'Map {overview_map_name} not found; overview maps will be copied from {template_map_name}')
+        overview_map_name = template_map_name
+    overview_layout_name = OVERVIEW_LAYOUT_TEMPLATE
+    if not any(l.name == overview_layout_name for l in aprx.listLayouts()):
+        warn(f'Layout {overview_layout_name} not found; overview layouts will be copied from {template_layout_name}')
+        overview_layout_name = template_layout_name
     map_sr = template_map_obj.spatialReference or model_sr
     gdb = aprx.defaultGeodatabase
     arcpy.env.overwriteOutput = True
@@ -546,16 +658,17 @@ def main():
     if zones_fc is None:
         warn('flushing_zones.geojson not found in the zip; overview maps will not show flushing zones')
 
-    total = sum(len(s.get('operations', [])) for s in sequences)
+    total = sum(len(s.get('operations', [])) for s in selected_sequences)
     arcpy.SetProgressor('step', 'Creating flushing maps', 0, total, 1)
     made = 0
 
-    for seq in sequences:
+    for seq in selected_sequences:
         seq_name = seq['name']
         seq_results = results.get(seq_name, {})
         flushed_pipes = set()
         flushed_hyds = {}  # hydrant GIS id -> label minutes
         seq_pipe_op, seq_op_order, seq_hyds, seq_valves, seq_notes = {}, [], [], {}, {}
+        seq_totals = {'minutes': 0.0, 'gallons': 0.0}
         for op in seq['operations']:
             op_name = str(op['name'])
             close_v = [str(v).strip() for v in (op.get('close_valves') or []) if str(v).strip()]
@@ -703,6 +816,8 @@ def main():
                 layout.exportToPDF(os.path.join(pdf_folder, f'{tag}.pdf'))
 
             flushed_pipes.update(pipes)
+            seq_totals['minutes'] += float(res.get('total_flush_time_min') or 0)
+            seq_totals['gallons'] += float(res.get('total_flush_volume_gal') or 0)
             for hid in hyd_ids:
                 flushed_hyds[hid] = f'{op_name}|{minutes}'
                 if hid not in seq_hyds:
@@ -724,10 +839,10 @@ def main():
             made += build_overview(
                 aprx, seq_name, seq_pipe_op, seq_op_order, seq_hyds, seq_valves, seq_notes,
                 dict(pipes_base=pipes_base, hyds_base=hyds_base, vals_base=vals_base, zones_fc=zones_fc),
-                dict(gdb=gdb, symb_layers=symb_layers, template_map_name=template_map_name,
-                     template_layout_name=template_layout_name, map_sr=map_sr,
+                dict(gdb=gdb, symb_layers=symb_layers, overview_map_name=overview_map_name,
+                     overview_layout_name=overview_layout_name, map_sr=map_sr,
                      buffer_dist=buffer_dist, min_scale=min_scale, pdf_folder=pdf_folder),
-                pipe_geom, hyd_geom, val_geom)
+                pipe_geom, hyd_geom, val_geom, seq_totals)
 
     aprx.save()
     message(f'Created {made} flushing maps and layouts')
